@@ -1,4 +1,7 @@
 
+# Hugo - Carpeta de despliegue (repositorio separado)
+public/
+
 # Credenciales (NO SUBIR)
 config/.env
 config/credentials.json
@@ -14,3 +17,6 @@ env/
 
 # Logs
 *.log
+
+# Hugo build files
+.hugo_build.lock
