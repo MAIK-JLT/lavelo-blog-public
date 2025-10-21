@@ -1,0 +1,16 @@
+
+# Credenciales (NO SUBIR)
+config/.env
+config/credentials.json
+config/*.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+env/
+
+# Logs
+*.log
