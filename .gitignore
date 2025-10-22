@@ -162,6 +162,9 @@ public/
 # Credenciales (NO SUBIR)
 config/.env
 config/*.json
+api/config/*.json
+api/config/token.json
+api/config/credentials.json
 
 # Hugo build files
 .hugo_build.lock
