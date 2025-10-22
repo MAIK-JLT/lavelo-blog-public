@@ -1,48 +1,57 @@
-// Configuración
-const API_BASE = '/api';
-const REFRESH_INTERVAL = 5000; // 5 segundos
-
-// Estado actual
+// ============================================
+// CONFIGURACIÓN
+// ============================================
+const API_BASE = 'http://localhost:5001/api';
 let currentPost = null;
+let currentPostIndex = 0;
 
-// Inicializar
+// ============================================
+// INICIALIZACIÓN
+// ============================================
 document.addEventListener('DOMContentLoaded', () => {
     updateCurrentDate();
     loadPostData();
-    setInterval(loadPostData, REFRESH_INTERVAL);
+    setTimeout(() => addPostSelector(), 1000);
 });
 
-// Actualizar fecha actual
-function updateCurrentDate() {
-    const now = new Date();
-    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
-    document.getElementById('current-date').textContent = now.toLocaleDateString('es-ES', options);
-}
-
-// Cargar datos del post activo
+// ============================================
+// CARGAR DATOS
+// ============================================
 async function loadPostData() {
     try {
-        const response = await fetch(`${API_BASE}/status`);
-        const data = await response.json();
+        const response = await fetch(`${API_BASE}/posts`, { credentials: 'include' });
+        const result = await response.json();
         
-        if (data.error) {
-            showError(data.error);
+        if (result.error) {
+            showError(result.error);
             return;
         }
         
+        const posts = result.posts || result;
+        
+        // Verificar que posts sea un array
+        if (!Array.isArray(posts)) {
+            console.error('posts no es un array:', posts);
+            showError('Formato de datos incorrecto');
+            return;
+        }
+        
+        localStorage.setItem('posts', JSON.stringify(posts));
+        const data = posts[currentPostIndex] || posts[0];
         currentPost = data;
+        
         renderPostInfo(data);
         renderProgress(data);
         renderPhases(data);
-        renderActions(data);
-        
     } catch (error) {
         showError('Error al cargar datos del servidor');
         console.error(error);
     }
 }
 
-// Renderizar información del post
+// ============================================
+// RENDERIZADO
+// ============================================
 function renderPostInfo(data) {
     const postInfo = document.getElementById('post-info');
     const statusClass = getStatusClass(data.estado);
@@ -56,7 +65,6 @@ function renderPostInfo(data) {
     `;
 }
 
-// Renderizar barra de progreso
 function renderProgress(data) {
     const progress = document.getElementById('progress');
     const percentage = calculateProgress(data);
@@ -64,137 +72,248 @@ function renderProgress(data) {
     progress.textContent = `${percentage}%`;
 }
 
-// Renderizar fases
 function renderPhases(data) {
     const phases = document.getElementById('phases');
     const phasesData = [
-        { id: 1, name: 'Texto Base', states: ['BASE_TEXT_AWAITING', 'BASE_TEXT_APPROVED'] },
-        { id: 2, name: 'Textos Adaptados', states: ['ADAPTED_TEXTS_AWAITING', 'TEXTS_APPROVED'] },
-        { id: 3, name: 'Prompt Imagen', states: ['IMAGE_PROMPT_AWAITING', 'IMAGE_PROMPT_APPROVED'] },
-        { id: 4, name: 'Imagen Base', states: ['IMAGE_BASE_AWAITING', 'IMAGE_BASE_APPROVED'] },
-        { id: 5, name: 'Formatos Imagen', states: ['IMAGE_FORMATS_AWAITING', 'IMAGES_APPROVED'] },
-        { id: 6, name: 'Prompt Video', states: ['VIDEO_PROMPT_AWAITING', 'VIDEO_PROMPT_APPROVED'] },
-        { id: 7, name: 'Video Base', states: ['VIDEO_BASE_AWAITING', 'VIDEO_BASE_APPROVED'] },
-        { id: 8, name: 'Formatos Video', states: ['VIDEO_FORMATS_AWAITING', 'READY_TO_PUBLISH'] },
-        { id: 9, name: 'Publicación', states: ['PUBLISHING', 'PUBLISHED'] }
+        { id: 1, name: 'Texto Base', states: ['BASE_TEXT_AWAITING'], step: 'base' },
+        { id: 2, name: 'Textos Adaptados', states: ['ADAPTED_TEXTS_AWAITING'], step: 'texts' },
+        { id: 3, name: 'Prompt Imagen', states: ['IMAGE_PROMPT_AWAITING'], step: 'image_prompt' },
+        { id: 4, name: 'Imagen Base', states: ['IMAGE_BASE_AWAITING'], step: 'image_base' },
+        { id: 5, name: 'Formatos Imagen', states: ['IMAGE_FORMATS_AWAITING'], step: 'image_formats' },
+        { id: 6, name: 'Script Video', states: ['VIDEO_PROMPT_AWAITING'], step: 'video_prompt' },
+        { id: 7, name: 'Video Base', states: ['VIDEO_BASE_AWAITING'], step: 'video_base' },
+        { id: 8, name: 'Formatos Video', states: ['VIDEO_FORMATS_AWAITING'], step: 'video_formats' },
+        { id: 9, name: 'Publicación', states: ['READY_TO_PUBLISH', 'PUBLISHED'], step: 'publish' }
     ];
     
     phases.innerHTML = phasesData.map(phase => {
         const status = getPhaseStatus(phase, data.estado);
-        const icon = status === 'completed' ? '✅' : status === 'active' ? '⏸️' : '🔒';
+        const icon = status === 'completed' ? '✅' : status === 'active' ? '📋' : '⏸️';
+        const description = getPhaseDescription(phase.id, status);
+        const buttons = getPhaseButtons(phase, status, data.estado);
+        
         return `
             <div class="phase ${status}">
-                <h3>${icon} Fase ${phase.id}: ${phase.name}</h3>
+                <div class="phase-header">
+                    <div class="phase-info">
+                        <h3>${icon} Fase ${phase.id}: ${phase.name}</h3>
+                        <p style="margin-top: 5px; font-size: 14px; color: #666;">${description}</p>
+                    </div>
+                    <div class="phase-actions">
+                        ${buttons}
+                    </div>
+                </div>
             </div>
         `;
     }).join('');
 }
 
-// Renderizar botones de acción
-function renderActions(data) {
-    const actions = document.getElementById('actions');
-    const buttons = getAvailableActions(data.estado);
-    
-    actions.innerHTML = buttons.map(btn => `
-        <button class="${btn.class}" onclick="${btn.action}">
-            ${btn.label}
-        </button>
-    `).join('');
-}
-
-// Obtener acciones disponibles según estado
-function getAvailableActions(estado) {
-    const actions = {
-        'BASE_TEXT_APPROVED': [
-            { label: '▶️ Generar Textos Adaptados', class: 'primary', action: 'generateAdaptedTexts()' }
-        ],
-        'TEXTS_APPROVED': [
-            { label: '▶️ Generar Prompt Imagen', class: 'primary', action: 'generateImagePrompt()' }
-        ],
-        'IMAGE_PROMPT_APPROVED': [
-            { label: '▶️ Generar Imagen Base', class: 'primary', action: 'generateBaseImage()' }
-        ],
-        'IMAGE_BASE_APPROVED': [
-            { label: '▶️ Formatear Imágenes', class: 'primary', action: 'formatImages()' }
-        ],
-        'IMAGES_APPROVED': [
-            { label: '▶️ Generar Script Video', class: 'primary', action: 'generateVideoScript()' }
-        ],
-        'VIDEO_PROMPT_APPROVED': [
-            { label: '▶️ Generar Video Base', class: 'primary', action: 'generateBaseVideo()' }
-        ],
-        'VIDEO_BASE_APPROVED': [
-            { label: '▶️ Formatear Videos', class: 'primary', action: 'formatVideos()' }
-        ],
-        'READY_TO_PUBLISH': [
-            { label: '🚀 Publicar Ahora', class: 'success', action: 'publishNow()' }
-        ],
-        'PUBLISHED': [
-            { label: '✅ Completado', class: 'success', action: '', disabled: true }
-        ]
+// ============================================
+// LÓGICA DE FASES
+// ============================================
+function getPhaseStatus(phase, currentState) {
+    const stateToPhase = {
+        'BASE_TEXT_AWAITING': 1,
+        'ADAPTED_TEXTS_AWAITING': 2,
+        'IMAGE_PROMPT_AWAITING': 3,
+        'IMAGE_BASE_AWAITING': 4,
+        'IMAGE_FORMATS_AWAITING': 5,
+        'VIDEO_PROMPT_AWAITING': 6,
+        'VIDEO_BASE_AWAITING': 7,
+        'VIDEO_FORMATS_AWAITING': 8,
+        'READY_TO_PUBLISH': 9,
+        'PUBLISHED': 9
     };
     
-    return actions[estado] || [
-        { label: '⏸️ Esperando validación...', class: 'secondary', action: '', disabled: true }
-    ];
+    const currentPhase = stateToPhase[currentState] || 0;
+    
+    if (phase.id < currentPhase) return 'completed';
+    if (phase.id === currentPhase) return 'active';
+    return 'locked';
 }
 
-// Acciones del API
-async function callAPI(endpoint, method = 'POST') {
+function getPhaseButtons(phase, status, currentState) {
+    if (status === 'locked') {
+        return '<span style="color: #999; font-size: 12px;">🔒 Pendiente</span>';
+    }
+    
+    if (status === 'completed') {
+        return '<span style="color: #28a745; font-size: 12px; font-weight: bold;">✅ Validado</span>';
+    }
+    
+    if (status === 'active') {
+        return `
+            <button class="phase-btn secondary" onclick="viewDetails()">📋 Ver Detalles</button>
+            <button class="phase-btn success" onclick="validatePhase()">✅ VALIDATE</button>
+        `;
+    }
+    
+    return '';
+}
+
+function getPhaseDescription(phaseId, status) {
+    const descriptions = {
+        1: status === 'active' ? 'Revisar y validar el texto base creado manualmente' : 
+            status === 'completed' ? 'Texto base validado ✓' : 'Pendiente de creación manual',
+        2: status === 'active' ? 'Revisar textos adaptados para cada red social' : 
+            status === 'completed' ? 'Textos adaptados validados ✓' : 'Se generarán automáticamente',
+        3: status === 'active' ? 'Revisar prompt para generación de imagen' : 
+            status === 'completed' ? 'Prompt de imagen validado ✓' : 'Se generará automáticamente',
+        4: status === 'active' ? 'Revisar imagen base generada por IA' : 
+            status === 'completed' ? 'Imagen base validada ✓' : 'Se generará automáticamente',
+        5: status === 'active' ? 'Revisar formatos de imagen para redes sociales' : 
+            status === 'completed' ? 'Formatos de imagen validados ✓' : 'Se generarán automáticamente',
+        6: status === 'active' ? 'Revisar script para generación de video' : 
+            status === 'completed' ? 'Script de video validado ✓' : 'Se generará automáticamente',
+        7: status === 'active' ? 'Revisar video base generado por IA' : 
+            status === 'completed' ? 'Video base validado ✓' : 'Se generará automáticamente',
+        8: status === 'active' ? 'Revisar formatos de video para redes sociales' : 
+            status === 'completed' ? 'Formatos de video validados ✓' : 'Se generarán automáticamente',
+        9: status === 'active' ? 'Listo para publicar en todas las plataformas' : 
+            status === 'completed' ? 'Publicado en todas las plataformas ✓' : 'Pendiente de completar fases anteriores'
+    };
+    return descriptions[phaseId] || '';
+}
+
+// ============================================
+// ACCIONES DE BOTONES
+// ============================================
+function checkPhase(phaseId) {
+    const btn = document.getElementById(`check-btn-${phaseId}`);
+    if (btn) {
+        btn.innerHTML = 'OK ✓';
+        btn.style.background = '#28a745';
+        btn.style.color = 'white';
+        btn.disabled = true;
+    }
+}
+
+async function validatePhase() {
+    if (!currentPost) {
+        showError('No hay post seleccionado');
+        return;
+    }
+    
+    const stateInfo = getStateInfo(currentPost.estado);
+    const message = `📋 VALIDACIÓN\n\n` +
+                   `Estado actual: ${stateInfo.name}\n` +
+                   `Acción: ${stateInfo.action}\n\n` +
+                   `Siguiente estado: ${stateInfo.next_name}\n\n` +
+                   `¿Continuar?`;
+    
+    if (!confirm(message)) return;
+    
+    const validateBtn = document.querySelector('.phase-btn.success');
+    if (validateBtn) {
+        validateBtn.disabled = true;
+        validateBtn.style.opacity = '0.6';
+        validateBtn.innerHTML = '⏳ Procesando...';
+    }
+    
     try {
-        showLoading();
-        const response = await fetch(`${API_BASE}${endpoint}`, {
-            method,
+        const response = await fetch(`${API_BASE}/validate-phase`, {
+            method: 'POST',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ codigo: currentPost.codigo })
+            body: JSON.stringify({ 
+                codigo: currentPost.codigo,
+                current_state: currentPost.estado
+            })
         });
         
         const result = await response.json();
-        hideLoading();
         
         if (result.success) {
-            showSuccess(result.message);
-            setTimeout(loadPostData, 2000);
+            loadPostData();
         } else {
             showError(result.error || 'Error desconocido');
+            if (validateBtn) {
+                validateBtn.disabled = false;
+                validateBtn.style.opacity = '1';
+                validateBtn.innerHTML = 'VALIDATE';
+            }
         }
     } catch (error) {
-        hideLoading();
-        showError('Error de conexión con el servidor');
+        showError('Error de conexión');
         console.error(error);
+        if (validateBtn) {
+            validateBtn.disabled = false;
+            validateBtn.style.opacity = '1';
+            validateBtn.innerHTML = 'VALIDATE';
+        }
     }
 }
 
-// Funciones de acción
-function generateAdaptedTexts() { callAPI('/generate-texts'); }
-function generateImagePrompt() { callAPI('/generate-image-prompt'); }
-function generateBaseImage() { callAPI('/generate-image'); }
-function formatImages() { callAPI('/format-images'); }
-function generateVideoScript() { callAPI('/generate-video-script'); }
-function generateBaseVideo() { callAPI('/generate-video'); }
-function formatVideos() { callAPI('/format-videos'); }
-function publishNow() { 
-    if (confirm('¿Publicar en todas las plataformas ahora?')) {
-        callAPI('/publish'); 
-    }
+function getStateInfo(estado) {
+    const states = {
+        'BASE_TEXT_AWAITING': { name: 'Texto Base', action: 'Generar textos adaptados para redes sociales', next_name: 'Textos Adaptados' },
+        'ADAPTED_TEXTS_AWAITING': { name: 'Textos Adaptados', action: 'Generar prompt de imagen', next_name: 'Prompt de Imagen' },
+        'IMAGE_PROMPT_AWAITING': { name: 'Prompt de Imagen', action: 'Generar imagen base', next_name: 'Imagen Base' },
+        'IMAGE_BASE_AWAITING': { name: 'Imagen Base', action: 'Generar formatos de imagen', next_name: 'Formatos de Imagen' },
+        'IMAGE_FORMATS_AWAITING': { name: 'Formatos de Imagen', action: 'Generar script de video', next_name: 'Script de Video' },
+        'VIDEO_PROMPT_AWAITING': { name: 'Script de Video', action: 'Generar video base', next_name: 'Video Base' },
+        'VIDEO_BASE_AWAITING': { name: 'Video Base', action: 'Generar formatos de video', next_name: 'Formatos de Video' },
+        'VIDEO_FORMATS_AWAITING': { name: 'Formatos de Video', action: 'Marcar como listo para publicar', next_name: 'Listo para Publicar' },
+        'READY_TO_PUBLISH': { name: 'Listo para Publicar', action: 'Publicar en todas las plataformas', next_name: 'Publicado' }
+    };
+    return states[estado] || { name: 'Desconocido', action: 'N/A', next_name: 'N/A' };
 }
 
-// Utilidades
+// ============================================
+// SELECTOR DE POSTS
+// ============================================
+function addPostSelector() {
+    const header = document.querySelector('header');
+    const existing = document.getElementById('post-selector-container');
+    if (existing) existing.remove();
+    
+    const posts = getStoredPosts();
+    if (!posts || posts.length === 0) return;
+    
+    const selector = document.createElement('div');
+    selector.id = 'post-selector-container';
+    selector.style.marginTop = '20px';
+    
+    selector.innerHTML = `
+        <label for="post-selector" style="display: block; margin-bottom: 10px; font-weight: bold;">📋 Seleccionar Post:</label>
+        <select id="post-selector" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; max-width: 400px;">
+            ${posts.map((post, index) => `
+                <option value="${index}" ${index === currentPostIndex ? 'selected' : ''}>
+                    ${post.codigo} - ${post.titulo}
+                </option>
+            `).join('')}
+        </select>
+    `;
+    header.appendChild(selector);
+    
+    document.getElementById('post-selector').addEventListener('change', (e) => {
+        currentPostIndex = parseInt(e.target.value);
+        loadPostData();
+    });
+}
+
+function getStoredPosts() {
+    const stored = localStorage.getItem('posts');
+    return stored ? JSON.parse(stored) : [];
+}
+
+// ============================================
+// UTILIDADES
+// ============================================
+function updateCurrentDate() {
+    const now = new Date();
+    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+    document.getElementById('current-date').textContent = now.toLocaleDateString('es-ES', options);
+}
+
 function calculateProgress(data) {
     const states = [
-        'BASE_TEXT_APPROVED', 'TEXTS_APPROVED', 'IMAGE_PROMPT_APPROVED',
-        'IMAGE_BASE_APPROVED', 'IMAGES_APPROVED', 'VIDEO_PROMPT_APPROVED',
-        'VIDEO_BASE_APPROVED', 'READY_TO_PUBLISH', 'PUBLISHED'
+        'BASE_TEXT_AWAITING', 'ADAPTED_TEXTS_AWAITING', 'IMAGE_PROMPT_AWAITING',
+        'IMAGE_BASE_AWAITING', 'IMAGE_FORMATS_AWAITING', 'VIDEO_PROMPT_AWAITING',
+        'VIDEO_BASE_AWAITING', 'VIDEO_FORMATS_AWAITING', 'READY_TO_PUBLISH', 'PUBLISHED'
     ];
     const index = states.indexOf(data.estado);
     return index >= 0 ? Math.round(((index + 1) / states.length) * 100) : 0;
-}
-
-function getPhaseStatus(phase, currentState) {
-    const stateIndex = phase.states.indexOf(currentState);
-    if (stateIndex === phase.states.length - 1) return 'completed';
-    if (stateIndex >= 0) return 'active';
-    return 'locked';
 }
 
 function getStatusClass(estado) {
@@ -209,18 +328,19 @@ function formatStatus(estado) {
     return estado.replace(/_/g, ' ');
 }
 
-function showLoading() {
-    document.body.style.cursor = 'wait';
-}
-
-function hideLoading() {
-    document.body.style.cursor = 'default';
-}
-
 function showSuccess(message) {
     alert('✅ ' + message);
 }
 
 function showError(message) {
     alert('❌ ' + message);
+}
+
+// Navegar a página de detalles
+function viewDetails() {
+    const posts = getStoredPosts();
+    const post = posts[currentPostIndex];
+    if (post) {
+        window.location.href = `/details.html?codigo=${post.codigo}`;
+    }
 }

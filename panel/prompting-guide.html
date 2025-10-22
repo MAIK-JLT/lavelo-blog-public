@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guía de Prompting - Gemini Image Generation</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/detail.css">
+    <style>
+        .guide-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .guide-section {
+            background: white;
+            padding: 25px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .template-box {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+            font-family: 'Courier New', monospace;
+            margin: 15px 0;
+        }
+        .example-box {
+            background: #d4edda;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #28a745;
+            margin: 15px 0;
+        }
+        .tip-box {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #ffc107;
+            margin: 15px 0;
+        }
+        .close-guide {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            z-index: 1000;
+        }
+        .close-guide:hover {
+            background: #5a6fd8;
+        }
+    </style>
+</head>
+<body>
+    <button class="close-guide" onclick="window.close()">✕ Cerrar Guía</button>
+    
+    <div class="guide-container">
+        <header style="text-align: center; margin-bottom: 40px;">
+            <h1>📸 Guía de Prompting para Gemini</h1>
+            <p style="color: #666; font-size: 18px;">Crea prompts efectivos para generar imágenes perfectas</p>
+        </header>
+
+        <div class="guide-section">
+            <h2>🎯 Plantilla para Imágenes Fotorrealistas</h2>
+            <p>Para obtener imágenes realistas de alta calidad, usa esta estructura:</p>
+            
+            <div class="template-box">
+A photorealistic [tipo de toma] of [sujeto], [acción o expresión], set in [entorno]. 
+The scene is illuminated by [descripción de iluminación], creating a [estado de ánimo] atmosphere. 
+Captured with a [detalles de cámara/lente], emphasizing [texturas y detalles clave]. 
+The image should be in a [formato de aspecto] format.
+            </div>
+
+            <div class="example-box">
+                <strong>✅ Ejemplo Perfecto:</strong><br>
+                "A photorealistic close-up of a professional triathlete, demonstrating bilateral breathing technique while swimming, set in crystal clear open water. The scene is illuminated by natural sunlight filtering through water, creating a serene and inspiring atmosphere. Captured with an 85mm underwater lens, emphasizing water droplets and perfect body alignment. The image should be in a 16:9 landscape format."
+            </div>
+        </div>
+
+        <div class="guide-section">
+            <h2>🏊‍♂️ Elementos Clave para Deportes</h2>
+            <ul>
+                <li><strong>Sujeto:</strong> "Professional triathlete", "Athletic swimmer", "Experienced athlete"</li>
+                <li><strong>Acción:</strong> "demonstrating breathing technique", "showing perfect form", "executing movement"</li>
+                <li><strong>Entorno:</strong> "crystal clear water", "open water swimming", "pool environment"</li>
+                <li><strong>Iluminación:</strong> "natural sunlight", "underwater lighting", "golden hour light"</li>
+                <li><strong>Detalles:</strong> "water droplets", "muscle definition", "perfect alignment"</li>
+            </ul>
+        </div>
+
+        <div class="guide-section">
+            <h2>📐 Especificaciones Técnicas</h2>
+            
+            <h3>Tipos de Toma:</h3>
+            <ul>
+                <li><strong>close-up:</strong> Enfoque en detalles específicos</li>
+                <li><strong>medium shot:</strong> Sujeto de cintura para arriba</li>
+                <li><strong>wide shot:</strong> Vista completa del sujeto y entorno</li>
+                <li><strong>macro shot:</strong> Detalles extremos (gotas de agua, texturas)</li>
+            </ul>
+
+            <h3>Iluminación:</h3>
+            <ul>
+                <li><strong>natural sunlight:</strong> Luz solar natural</li>
+                <li><strong>golden hour light:</strong> Luz cálida del amanecer/atardecer</li>
+                <li><strong>soft diffused light:</strong> Luz suave y difusa</li>
+                <li><strong>underwater lighting:</strong> Iluminación bajo el agua</li>
+            </ul>
+
+            <h3>Formatos de Aspecto:</h3>
+            <ul>
+                <li><strong>16:9 landscape:</strong> Para posts horizontales</li>
+                <li><strong>1:1 square:</strong> Para Instagram feed</li>
+                <li><strong>9:16 portrait:</strong> Para Stories y TikTok</li>
+            </ul>
+        </div>
+
+        <div class="guide-section">
+            <h2>💡 Mejores Prácticas</h2>
+            
+            <div class="tip-box">
+                <strong>🎯 Sé Hiperespecífico:</strong><br>
+                En lugar de "nadador", usa "professional triathlete with perfect technique"
+            </div>
+
+            <div class="tip-box">
+                <strong>📝 Proporciona Contexto:</strong><br>
+                Explica el propósito: "for educational blog post about swimming technique"
+            </div>
+
+            <div class="tip-box">
+                <strong>🚫 Instrucciones Negativas:</strong><br>
+                En lugar de "sin texto", describe positivamente: "clean image without any text overlays"
+            </div>
+
+            <div class="tip-box">
+                <strong>📷 Controla la Cámara:</strong><br>
+                Usa términos fotográficos: "85mm lens", "shallow depth of field", "bokeh background"
+            </div>
+        </div>
+
+        <div class="guide-section">
+            <h2>⚠️ Limitaciones de Gemini</h2>
+            <ul>
+                <li>No puede generar imágenes de personas reales específicas</li>
+                <li>Evita contenido violento o inapropiado</li>
+                <li>Las imágenes se generan en formato cuadrado por defecto</li>
+                <li>Máximo 2000 caracteres por prompt</li>
+            </ul>
+        </div>
+
+        <div class="guide-section" style="text-align: center; background: #667eea; color: white;">
+            <h2>🚀 ¡Listo para Generar!</h2>
+            <p>Usa esta guía para crear prompts efectivos y obtener imágenes perfectas para tu blog de triatlón.</p>
+            <button onclick="window.close()" style="background: white; color: #667eea; border: none; padding: 15px 30px; border-radius: 25px; font-weight: bold; cursor: pointer; margin-top: 15px;">
+                Cerrar y Generar Imagen
+            </button>
+        </div>
+    </div>
+</body>
+</html>
