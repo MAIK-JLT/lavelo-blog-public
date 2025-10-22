@@ -45,6 +45,21 @@ CORS(app,
          "supports_credentials": True
      }})
 
+# Cache simple para posts (evitar múltiples llamadas simultáneas a Sheets)
+posts_cache = {'data': None, 'timestamp': 0}
+CACHE_TTL = 5  # 5 segundos
+
+def get_cached_posts():
+    """Obtener posts con cache para evitar múltiples llamadas simultáneas"""
+    import time
+    current_time = time.time()
+    
+    if posts_cache['data'] is None or (current_time - posts_cache['timestamp']) > CACHE_TTL:
+        posts_cache['data'] = sheets_service.get_posts()
+        posts_cache['timestamp'] = current_time
+    
+    return posts_cache['data']
+
 # Ruta principal del panel
 @app.route('/')
 def index():
@@ -90,6 +105,39 @@ def get_posts():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# API: Inicializar estructura de carpetas de un post
+@app.route('/api/posts/<codigo>/init-folders', methods=['POST'])
+def init_post_folders(codigo):
+    try:
+        # Obtener post
+        posts = sheets_service.get_posts()
+        post = next((p for p in posts if p['codigo'] == codigo), None)
+        
+        if not post or not post.get('drive_folder_id'):
+            return jsonify({'error': 'Post no encontrado o sin Drive Folder ID'}), 404
+        
+        folder_id = post['drive_folder_id']
+        print(f"📁 Inicializando carpetas para post {codigo} (Drive ID: {folder_id})")
+        
+        # Crear las 3 subcarpetas si no existen
+        subfolders = ['textos', 'imagenes', 'videos']
+        created = []
+        
+        for subfolder in subfolders:
+            subfolder_id = sheets_service.get_subfolder_id(folder_id, subfolder, create_if_missing=True)
+            if subfolder_id:
+                created.append(subfolder)
+        
+        return jsonify({
+            'success': True,
+            'message': f'Estructura de carpetas inicializada',
+            'folders_created': created
+        })
+        
+    except Exception as e:
+        print(f"❌ Error inicializando carpetas: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/drive/file', methods=['GET'])
 def get_drive_file():
     try:
@@ -125,6 +173,128 @@ def get_drive_file():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/drive/image', methods=['GET'])
+def get_drive_image():
+    """Servir imágenes desde Google Drive con reintentos"""
+    try:
+        from flask import send_file
+        import time
+        codigo = request.args.get('codigo')
+        folder = request.args.get('folder')
+        filename = request.args.get('filename')
+        
+        if not all([codigo, folder, filename]):
+            return jsonify({'error': 'Faltan parámetros'}), 400
+        
+        # Obtener folder_id del post (usando cache)
+        posts = get_cached_posts()
+        post = next((p for p in posts if p['codigo'] == codigo), None)
+        
+        if not post or not post.get('drive_folder_id'):
+            return jsonify({'error': 'Post no encontrado'}), 404
+        
+        # Obtener subfolder
+        folder_id = post['drive_folder_id']
+        subfolder_id = sheets_service.get_subfolder_id(folder_id, folder)
+        
+        if not subfolder_id:
+            return jsonify({'error': f'Carpeta {folder} no encontrada'}), 404
+        
+        # Leer imagen con reintentos para errores de SSL
+        max_retries = 3
+        image_bytes = None
+        
+        for attempt in range(max_retries):
+            try:
+                image_bytes = sheets_service.get_image_from_drive(subfolder_id, filename)
+                if image_bytes:
+                    break
+            except Exception as retry_error:
+                if 'SSL' in str(retry_error) or 'ssl' in str(retry_error).lower():
+                    print(f"⚠️ Error SSL en intento {attempt + 1}/{max_retries}: {retry_error}")
+                    if attempt < max_retries - 1:
+                        time.sleep(0.5 * (attempt + 1))  # Espera incremental
+                        continue
+                raise retry_error
+        
+        if not image_bytes:
+            return jsonify({'error': 'Imagen no encontrada'}), 404
+        
+        # Servir imagen
+        return send_file(
+            BytesIO(image_bytes),
+            mimetype='image/png',
+            as_attachment=False,
+            download_name=filename
+        )
+        
+    except Exception as e:
+        print(f"❌ Error sirviendo imagen {filename}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/drive/video', methods=['GET'])
+def get_drive_video():
+    """Servir videos desde Google Drive con reintentos"""
+    try:
+        from flask import send_file
+        import time
+        codigo = request.args.get('codigo')
+        folder = request.args.get('folder')
+        filename = request.args.get('filename')
+        
+        if not all([codigo, folder, filename]):
+            return jsonify({'error': 'Faltan parámetros'}), 400
+        
+        # Obtener folder_id del post (usando cache)
+        posts = get_cached_posts()
+        post = next((p for p in posts if p['codigo'] == codigo), None)
+        
+        if not post or not post.get('drive_folder_id'):
+            return jsonify({'error': 'Post no encontrado'}), 404
+        
+        # Obtener subfolder
+        folder_id = post['drive_folder_id']
+        subfolder_id = sheets_service.get_subfolder_id(folder_id, folder)
+        
+        if not subfolder_id:
+            return jsonify({'error': f'Carpeta {folder} no encontrada'}), 404
+        
+        # Leer video con reintentos para errores de SSL
+        max_retries = 3
+        video_bytes = None
+        
+        for attempt in range(max_retries):
+            try:
+                video_bytes = sheets_service.get_image_from_drive(subfolder_id, filename)
+                if video_bytes:
+                    break
+            except Exception as retry_error:
+                if 'SSL' in str(retry_error) or 'ssl' in str(retry_error).lower():
+                    print(f"⚠️ Error SSL en intento {attempt + 1}/{max_retries}: {retry_error}")
+                    if attempt < max_retries - 1:
+                        time.sleep(0.5 * (attempt + 1))
+                        continue
+                raise retry_error
+        
+        if not video_bytes:
+            return jsonify({'error': 'Video no encontrado'}), 404
+        
+        # Servir video
+        return send_file(
+            BytesIO(video_bytes),
+            mimetype='video/mp4',
+            as_attachment=False,
+            download_name=filename
+        )
+        
+    except Exception as e:
+        print(f"❌ Error sirviendo video {filename}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/drive/save-file', methods=['POST'])
 def save_drive_file():
     try:
@@ -144,19 +314,62 @@ def save_drive_file():
         if not post or not post.get('drive_folder_id'):
             return jsonify({'error': 'Post no encontrado'}), 404
         
-        # Obtener subfolder
+        # Obtener subfolder (crear si no existe)
         folder_id = post['drive_folder_id']
-        subfolder_id = sheets_service.get_subfolder_id(folder_id, folder)
+        subfolder_id = sheets_service.get_subfolder_id(folder_id, folder, create_if_missing=True)
         
         if not subfolder_id:
-            return jsonify({'error': f'Carpeta {folder} no encontrada'}), 404
+            return jsonify({'error': f'No se pudo crear/encontrar carpeta {folder}'}), 404
         
         # Guardar archivo
         sheets_service.save_file_to_drive(subfolder_id, filename, content)
+        print(f"✅ Archivo guardado: {filename}")
         
-        return jsonify({'success': True, 'message': 'Archivo guardado'})
+        # Actualizar checkbox correspondiente en Excel
+        checkbox_updated = False
+        if folder == 'textos':
+            if f'{codigo}_base.txt' in filename:
+                sheets_service.update_post_field(codigo, 'base_text', 'TRUE')
+                checkbox_updated = True
+                print(f"✅ Checkbox base_text actualizado a TRUE")
+            elif f'{codigo}_instagram.txt' in filename:
+                sheets_service.update_post_field(codigo, 'adapted_texts_instagram', 'TRUE')
+                checkbox_updated = True
+            elif f'{codigo}_linkedin.txt' in filename:
+                sheets_service.update_post_field(codigo, 'adapted_texts_linkedin', 'TRUE')
+                checkbox_updated = True
+            elif f'{codigo}_twitter.txt' in filename:
+                sheets_service.update_post_field(codigo, 'adapted_texts_twitter', 'TRUE')
+                checkbox_updated = True
+            elif f'{codigo}_facebook.txt' in filename:
+                sheets_service.update_post_field(codigo, 'adapted_texts_facebook', 'TRUE')
+                checkbox_updated = True
+            elif f'{codigo}_tiktok.txt' in filename:
+                sheets_service.update_post_field(codigo, 'adapted_texts_tiktok', 'TRUE')
+                checkbox_updated = True
+            elif 'prompt_imagen' in filename:
+                sheets_service.update_post_field(codigo, 'image_prompt', 'TRUE')
+                checkbox_updated = True
+            elif 'script_video' in filename:
+                sheets_service.update_post_field(codigo, 'video_prompt', 'TRUE')
+                checkbox_updated = True
+        elif folder == 'imagenes':
+            if 'imagen_base' in filename:
+                sheets_service.update_post_field(codigo, 'image_base', 'TRUE')
+                checkbox_updated = True
+        elif folder == 'videos':
+            if 'video_base' in filename:
+                sheets_service.update_post_field(codigo, 'video_base', 'TRUE')
+                checkbox_updated = True
+        
+        return jsonify({
+            'success': True, 
+            'message': 'Archivo guardado',
+            'checkbox_updated': checkbox_updated
+        })
         
     except Exception as e:
+        print(f"❌ Error en save_drive_file: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 # API: Obtener estado actual (legacy)
@@ -251,15 +464,19 @@ def validate_phase():
             # Obtener folder_id del post
             posts = sheets_service.get_posts()
             post = next((p for p in posts if p['codigo'] == codigo), None)
-            if not post or not post.get('drive_folder_id'):
-                return jsonify({'error': 'Post no encontrado o sin carpeta de Drive'}), 400
+            if not post:
+                return jsonify({'error': f'Post {codigo} no encontrado en el Excel'}), 400
+            
+            if not post.get('drive_folder_id'):
+                return jsonify({'error': f'El post {codigo} no tiene Drive Folder ID configurado en la columna G del Excel'}), 400
             
             folder_id = post['drive_folder_id']
+            print(f"📁 Drive Folder ID del post: {folder_id}")
             
             # Buscar subcarpeta 'textos'
             textos_folder_id = sheets_service.get_subfolder_id(folder_id, 'textos')
             if not textos_folder_id:
-                return jsonify({'error': 'No se encontró la carpeta textos/ en Drive'}), 400
+                return jsonify({'error': f'No se encontró la carpeta "textos" dentro de la carpeta de Drive con ID: {folder_id}. Verifica que exista la estructura: [carpeta-post]/textos/'}), 400
             
             # Leer CODIGO_base.txt de Drive/textos/
             base_filename = f"{codigo}_base.txt"

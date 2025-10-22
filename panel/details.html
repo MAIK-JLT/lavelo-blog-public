@@ -6,25 +6,45 @@
     <title>Detalles del Post - Lavelo Blog</title>
     <link rel="stylesheet" href="css/style.css">
     <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            margin: 0;
+        }
+        
         .details-container {
             max-width: 1200px;
             margin: 0 auto;
-            padding: 20px;
         }
         
         .details-header {
             background: white;
-            padding: 20px;
-            border-radius: 8px;
+            padding: 30px;
+            border-radius: 15px;
             margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .details-header h1 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 2em;
+        }
+        
+        .details-header p {
+            color: #666;
+            margin: 8px 0;
+            font-size: 1.1em;
         }
         
         .details-content {
             background: white;
             padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
         }
         
         .phase-section {
@@ -32,91 +52,204 @@
         }
         
         .phase-title {
-            font-size: 1.5em;
-            color: #2c3e50;
+            font-size: 1.8em;
+            color: #667eea;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #667eea;
+        }
+        
+        .text-item {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .text-item h3 {
+            color: #333;
             margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #3498db;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.3em;
         }
         
         .content-editor {
             width: 100%;
-            min-height: 300px;
+            min-height: 200px;
             padding: 15px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-family: monospace;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
             font-size: 14px;
+            line-height: 1.6;
             resize: vertical;
+            transition: border-color 0.3s, box-shadow 0.3s;
+            background: white;
         }
         
         .content-editor:focus {
             outline: none;
-            border-color: #3498db;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .content-editor.modified {
+            border-color: #ffc107;
+            background: #fffef7;
+        }
+        
+        .save-btn-container {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .save-btn {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+            display: none;
+        }
+        
+        .save-btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+        
+        .save-btn.show {
+            display: inline-block;
+        }
+        
+        .save-status {
+            color: #28a745;
+            font-size: 14px;
+            font-weight: 600;
+            display: none;
+            animation: fadeIn 0.3s;
+        }
+        
+        .save-status.show {
+            display: inline-block;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        #message-container {
+            margin-top: 20px;
+            min-height: 60px;
+        }
+        
+        .message {
+            padding: 20px 25px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 1.1em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            animation: slideIn 0.4s ease-out;
+            background: white;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 2px solid #c3e6cb;
+        }
+        
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 2px solid #f5c6cb;
+        }
+        
+        .message.loading {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 2px solid #bee5eb;
         }
         
         .actions {
             display: flex;
-            gap: 10px;
-            margin-top: 20px;
-            justify-content: flex-end;
+            gap: 15px;
+            justify-content: center;
+            padding: 20px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
         }
         
         .btn {
-            padding: 10px 20px;
+            padding: 15px 30px;
             border: none;
-            border-radius: 4px;
+            border-radius: 10px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 16px;
+            font-weight: bold;
             transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.2);
         }
         
         .btn-primary {
-            background: #3498db;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
         }
         
-        .btn-primary:hover {
-            background: #2980b9;
-        }
-        
         .btn-success {
-            background: #27ae60;
+            background: #28a745;
             color: white;
         }
         
         .btn-success:hover {
-            background: #229954;
+            background: #218838;
         }
         
         .btn-secondary {
-            background: #95a5a6;
+            background: #6c757d;
             color: white;
         }
         
         .btn-secondary:hover {
-            background: #7f8c8d;
-        }
-        
-        .btn-danger {
-            background: #e74c3c;
-            color: white;
-        }
-        
-        .btn-danger:hover {
-            background: #c0392b;
+            background: #5a6268;
         }
         
         .status-badge {
             display: inline-block;
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 0.9em;
+            padding: 8px 20px;
+            border-radius: 25px;
+            font-size: 1em;
             font-weight: bold;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
         
         .status-awaiting {
-            background: #f39c12;
+            background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
             color: white;
         }
         
@@ -152,24 +285,25 @@
         
         .loading {
             text-align: center;
-            padding: 40px;
-            color: #7f8c8d;
+            padding: 60px;
+            color: #667eea;
+            font-size: 1.2em;
         }
         
-        .error {
-            background: #e74c3c;
-            color: white;
-            padding: 15px;
-            border-radius: 4px;
-            margin-bottom: 20px;
+        .spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
         }
         
-        .success {
-            background: #27ae60;
-            color: white;
-            padding: 15px;
-            border-radius: 4px;
-            margin-bottom: 20px;
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -181,8 +315,6 @@
             <p><strong>Estado:</strong> <span id="post-estado" class="status-badge"></span></p>
         </div>
         
-        <div id="message-container"></div>
-        
         <div class="details-content">
             <div id="phase-content" class="loading">
                 Cargando contenido...
@@ -190,10 +322,10 @@
         </div>
         
         <div class="actions">
-            <button class="btn btn-secondary" onclick="cancelar()">❌ Cancelar</button>
-            <button class="btn btn-primary" id="save-btn" onclick="guardarCambios()" style="display:none;">💾 Guardar Cambios</button>
-            <button class="btn btn-success" id="validate-btn" onclick="validar()" style="display:none;">✅ Validar y Continuar</button>
+            <button class="btn btn-secondary" onclick="cancelar()">← Volver</button>
         </div>
+        
+        <div id="message-container"></div>
     </div>
     
     <script src="js/details.js"></script>

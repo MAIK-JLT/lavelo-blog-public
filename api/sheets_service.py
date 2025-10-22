@@ -271,8 +271,8 @@ class SheetsService:
         # Si todos están en TRUE
         return 'PUBLISHED'
     
-    def get_subfolder_id(self, parent_folder_id, subfolder_name):
-        """Obtener el ID de una subcarpeta dentro de una carpeta"""
+    def get_subfolder_id(self, parent_folder_id, subfolder_name, create_if_missing=False):
+        """Obtener el ID de una subcarpeta dentro de una carpeta, creándola si no existe"""
         try:
             if not hasattr(self, 'drive_service'):
                 self.drive_service = build('drive', 'v3', credentials=self.creds)
@@ -288,11 +288,27 @@ class SheetsService:
                 print(f"✅ Subcarpeta encontrada: {subfolder_name} (ID: {folders[0]['id']})")
                 return folders[0]['id']
             
+            # Si no existe y create_if_missing=True, crearla
+            if create_if_missing:
+                print(f"📁 Creando subcarpeta: {subfolder_name}")
+                folder_metadata = {
+                    'name': subfolder_name,
+                    'mimeType': 'application/vnd.google-apps.folder',
+                    'parents': [parent_folder_id]
+                }
+                folder = self.drive_service.files().create(
+                    body=folder_metadata,
+                    fields='id'
+                ).execute()
+                folder_id = folder.get('id')
+                print(f"✅ Subcarpeta creada: {subfolder_name} (ID: {folder_id})")
+                return folder_id
+            
             print(f"❌ Subcarpeta no encontrada: {subfolder_name}")
             return None
             
         except Exception as e:
-            print(f"❌ Error buscando subcarpeta {subfolder_name}: {str(e)}")
+            print(f"❌ Error buscando/creando subcarpeta {subfolder_name}: {str(e)}")
             return None
     
     def get_file_from_drive(self, folder_id, filename):

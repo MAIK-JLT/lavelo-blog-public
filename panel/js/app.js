@@ -9,6 +9,13 @@ let currentPostIndex = 0;
 // INICIALIZACIÓN
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
+    // Restaurar índice del post si viene de details
+    const savedIndex = localStorage.getItem('currentPostIndex');
+    if (savedIndex !== null) {
+        currentPostIndex = parseInt(savedIndex);
+        localStorage.removeItem('currentPostIndex'); // Limpiar después de usar
+    }
+    
     updateCurrentDate();
     loadPostData();
     setTimeout(() => addPostSelector(), 1000);
