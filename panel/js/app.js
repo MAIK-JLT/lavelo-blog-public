@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     updateCurrentDate();
+    initNetworksFilter();
     loadPostData();
     setTimeout(() => addPostSelector(), 1000);
 });
@@ -48,8 +49,12 @@ async function loadPostData() {
         currentPost = data;
         
         renderPostInfo(data);
-        renderProgress(data);
         renderPhases(data);
+        renderProgress(data);
+        updateNetworksFromPost(data);
+        
+        // Actualizar selector de posts
+        addPostSelector();
     } catch (error) {
         showError('Error al cargar datos del servidor');
         console.error(error);
@@ -64,7 +69,12 @@ function renderPostInfo(data) {
     const statusClass = getStatusClass(data.estado);
     
     postInfo.innerHTML = `
-        <h2>📄 ${data.titulo || 'Sin título'}</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h2 style="margin: 0;">📄 ${data.titulo || 'Sin título'}</h2>
+            <button class="delete-post-btn" onclick="deletePost()" title="Eliminar este post">
+                🗑️ Eliminar Post
+            </button>
+        </div>
         <p><strong>Código:</strong> ${data.codigo}</p>
         <p><strong>Idea:</strong> ${data.idea || 'Sin descripción'}</p>
         <span class="status ${statusClass}">${formatStatus(data.estado)}</span>
@@ -144,13 +154,20 @@ function getPhaseButtons(phase, status, currentState) {
         return '<span style="color: #999; font-size: 12px;">🔒 Pendiente</span>';
     }
     
+    // Obtener el estado correspondiente a esta fase
+    const phaseState = phase.states[0]; // Usar el primer estado de la fase
+    
     if (status === 'completed') {
-        return '<span style="color: #28a745; font-size: 12px; font-weight: bold;">✅ Validado</span>';
+        // Fases completadas TAMBIÉN tienen botón "Ver Detalles"
+        return `
+            <button class="phase-btn secondary" onclick="viewDetails('${phaseState}')">📋 Ver Detalles</button>
+            <span style="color: #28a745; font-size: 12px; font-weight: bold; margin-left: 10px;">✅ Validado</span>
+        `;
     }
     
     if (status === 'active') {
         return `
-            <button class="phase-btn secondary" onclick="viewDetails()">📋 Ver Detalles</button>
+            <button class="phase-btn secondary" onclick="viewDetails('${phaseState}')">📋 Ver Detalles</button>
             <button class="phase-btn success" onclick="validatePhase()">✅ VALIDATE</button>
         `;
     }
@@ -218,13 +235,17 @@ async function validatePhase() {
     }
     
     try {
+        // Obtener redes seleccionadas
+        const selectedNetworks = getSelectedNetworks();
+        
         const response = await fetch(`${API_BASE}/validate-phase`, {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 codigo: currentPost.codigo,
-                current_state: currentPost.estado
+                current_state: currentPost.estado,
+                redes: selectedNetworks
             })
         });
         
@@ -282,14 +303,21 @@ function addPostSelector() {
     selector.style.marginTop = '20px';
     
     selector.innerHTML = `
-        <label for="post-selector" style="display: block; margin-bottom: 10px; font-weight: bold;">📋 Seleccionar Post:</label>
-        <select id="post-selector" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%; max-width: 400px;">
-            ${posts.map((post, index) => `
-                <option value="${index}" ${index === currentPostIndex ? 'selected' : ''}>
-                    ${post.codigo} - ${post.titulo}
-                </option>
-            `).join('')}
-        </select>
+        <div style="display: flex; gap: 15px; align-items: flex-end;">
+            <div style="flex: 1;">
+                <label for="post-selector" style="display: block; margin-bottom: 10px; font-weight: bold;">📋 Seleccionar Post:</label>
+                <select id="post-selector" style="padding: 10px; border-radius: 5px; border: 1px solid #ddd; width: 100%;">
+                    ${posts.map((post, index) => `
+                        <option value="${index}" ${index === currentPostIndex ? 'selected' : ''}>
+                            ${post.codigo} - ${post.titulo}
+                        </option>
+                    `).join('')}
+                </select>
+            </div>
+            <button id="create-post-btn" class="create-post-btn" title="Crear nuevo post con IA">
+                ➕ Crear Nuevo Post
+            </button>
+        </div>
     `;
     header.appendChild(selector);
     
@@ -297,11 +325,29 @@ function addPostSelector() {
         currentPostIndex = parseInt(e.target.value);
         loadPostData();
     });
+    
+    document.getElementById('create-post-btn').addEventListener('click', createNewPost);
 }
 
 function getStoredPosts() {
     const stored = localStorage.getItem('posts');
     return stored ? JSON.parse(stored) : [];
+}
+
+function createNewPost() {
+    // Abrir el chat
+    const modal = document.getElementById('chat-modal');
+    modal.style.display = 'flex';
+    
+    // Esperar un momento para que el chat se abra
+    setTimeout(() => {
+        // Simular que el usuario escribió el mensaje
+        const input = document.getElementById('chat-input');
+        input.value = 'Ayúdame a crear un nuevo post';
+        
+        // Enviar el mensaje automáticamente
+        sendChatMessage();
+    }, 300);
 }
 
 // ============================================
@@ -344,10 +390,173 @@ function showError(message) {
 }
 
 // Navegar a página de detalles
-function viewDetails() {
+function viewDetails(targetState) {
     const posts = getStoredPosts();
     const post = posts[currentPostIndex];
     if (post) {
-        window.location.href = `/details.html?codigo=${post.codigo}`;
+        // Si se proporciona targetState, usarlo; si no, usar el estado actual del post
+        const estado = targetState || post.estado;
+        window.location.href = `/details.html?codigo=${post.codigo}&estado=${estado}`;
+    }
+}
+
+// ============================================
+// FILTRO DE REDES SOCIALES
+// ============================================
+
+function initNetworksFilter() {
+    // Solo añadir listeners, la carga se hace en loadPostData()
+    const checkboxes = document.querySelectorAll('.network-checkbox input[type="checkbox"]');
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', onNetworkChange);
+    });
+}
+
+function updateNetworksFromPost(post) {
+    // Cargar configuración de redes desde el post actual
+    if (!post) return;
+    
+    const networks = {
+        instagram: post.redes_instagram === 'TRUE',
+        linkedin: post.redes_linkedin === 'TRUE',
+        twitter: post.redes_twitter === 'TRUE',
+        facebook: post.redes_facebook === 'TRUE',
+        tiktok: post.redes_tiktok === 'TRUE',
+        blog: post.redes_blog === 'TRUE'
+    };
+    
+    // Aplicar a checkboxes
+    Object.keys(networks).forEach(network => {
+        const checkbox = document.getElementById(`network-${network}`);
+        if (checkbox && network !== 'blog') {  // Blog siempre disabled
+            checkbox.checked = networks[network];
+        }
+    });
+    
+    // Bloquear checkboxes si ya pasó de Fase 1
+    const canEditNetworks = post.estado === 'DRAFT' || post.estado === 'BASE_TEXT_AWAITING';
+    const checkboxes = document.querySelectorAll('.network-checkbox input[type="checkbox"]:not([value="blog"])');
+    const warning = document.getElementById('networks-warning');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.disabled = !canEditNetworks;
+    });
+    
+    if (!canEditNetworks) {
+        warning.style.display = 'block';
+    } else {
+        warning.style.display = 'none';
+    }
+}
+
+async function onNetworkChange() {
+    // Guardar inmediatamente en Sheet cuando cambia un checkbox
+    if (!currentPost) return;
+    
+    const networks = {
+        instagram: document.getElementById('network-instagram').checked,
+        linkedin: document.getElementById('network-linkedin').checked,
+        twitter: document.getElementById('network-twitter').checked,
+        facebook: document.getElementById('network-facebook').checked,
+        tiktok: document.getElementById('network-tiktok').checked,
+        blog: true  // Blog siempre activo
+    };
+    
+    console.log('📱 Guardando configuración de redes:', networks);
+    
+    try {
+        const response = await fetch(`${API_BASE}/posts/${currentPost.codigo}/update-networks`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ redes: networks })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            console.log('✅ Redes guardadas en Sheet');
+        } else {
+            console.error('❌ Error guardando redes:', result.error);
+            showError('Error guardando configuración de redes');
+        }
+    } catch (error) {
+        console.error('❌ Error:', error);
+        showError('Error de conexión al guardar redes');
+    }
+}
+
+function getSelectedNetworks() {
+    // Obtener redes del post actual (no de localStorage)
+    if (!currentPost) {
+        return {
+            instagram: false,
+            linkedin: false,
+            twitter: false,
+            facebook: false,
+            tiktok: false,
+            blog: true  // Solo Blog activo por defecto
+        };
+    }
+    
+    return {
+        instagram: currentPost.redes_instagram === 'TRUE',
+        linkedin: currentPost.redes_linkedin === 'TRUE',
+        twitter: currentPost.redes_twitter === 'TRUE',
+        facebook: currentPost.redes_facebook === 'TRUE',
+        tiktok: currentPost.redes_tiktok === 'TRUE',
+        blog: currentPost.redes_blog === 'TRUE'
+    };
+}
+
+// ============================================
+// ELIMINAR POST
+// ============================================
+
+async function deletePost() {
+    if (!currentPost) {
+        showError('No hay post seleccionado');
+        return;
+    }
+    
+    const confirmMessage = `⚠️ ELIMINAR POST\n\n` +
+                          `Post: ${currentPost.codigo}\n` +
+                          `Título: ${currentPost.titulo}\n\n` +
+                          `Esto eliminará:\n` +
+                          `- Fila en Google Sheets\n` +
+                          `- Carpeta completa en Google Drive\n` +
+                          `- Todos los archivos generados\n\n` +
+                          `Esta acción NO se puede deshacer.\n\n` +
+                          `¿Estás seguro?`;
+    
+    if (!confirm(confirmMessage)) return;
+    
+    // Doble confirmación
+    const doubleConfirm = prompt(`Para confirmar, escribe el código del post: ${currentPost.codigo}`);
+    if (doubleConfirm !== currentPost.codigo) {
+        showError('Código incorrecto. Eliminación cancelada.');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/posts/${currentPost.codigo}/delete`, {
+            method: 'DELETE',
+            credentials: 'include'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('Post eliminado correctamente');
+            // Recargar página para mostrar siguiente post
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+        } else {
+            showError(result.error || 'Error eliminando post');
+        }
+    } catch (error) {
+        showError('Error de conexión');
+        console.error(error);
     }
 }

@@ -428,18 +428,28 @@ Estado "ERROR" → 🔴 Rojo (revisar)
 ## 🛠️ HERRAMIENTAS Y TECNOLOGÍA
 
 ### Generación de Contenido:
+- **Claude 3.5 Sonnet (claude-3-5-sonnet-20241022):** Chat integrado, creación de posts, mejora de prompts
 - **Claude Haiku 4.5 (claude-haiku-4-5-20251001):** Textos adaptados y prompts (rápido y económico)
 - **DALL-E 3 (OpenAI):** Generación de imágenes ($0.04/imagen 1024x1024)
 - **Veo 3.1 Fast (Google):** Generación de videos (15 seg, 1080p) con API
 
 ### Procesamiento:
 - **Pillow (PIL):** Crop y resize de imágenes
+- **FFmpeg:** Procesamiento y conversión de videos
 - **Cloudinary AI:** Smart reframing de videos con detección de sujetos
 
-### Orquestación:
-- **Panel Web HTML + Flask API:** Control manual con botones
+### Backend:
+- **Flask:** API REST para el panel web
+- **Python 3.13:** Lenguaje principal
 - **Google Sheets API:** Lectura de estados y actualización
 - **Google Drive API:** Almacenamiento y gestión de archivos
+- **Anthropic API:** Integración con Claude
+
+### Frontend:
+- **HTML5 + CSS3:** Interfaz del panel
+- **JavaScript (Vanilla):** Lógica del cliente
+- **Fetch API:** Comunicación con backend
+- **LocalStorage:** Persistencia de datos del cliente
 
 ### Publicación:
 - **Instagram Graph API**
@@ -451,133 +461,232 @@ Estado "ERROR" → 🔴 Rojo (revisar)
 
 ---
 
+## 🎨 FUNCIONALIDADES DEL PANEL WEB
+
+### **Panel Principal (index.html)**
+- ✅ Vista de todos los posts desde Google Sheets
+- ✅ Selector de posts con navegación
+- ✅ Visualización de 9 fases del workflow
+- ✅ Estados visuales: 🔒 Pendiente / 📋 Activo / ✅ Validado
+- ✅ Botones "Ver Detalles" en TODAS las fases (activas y completadas)
+- ✅ Botón "VALIDATE" para avanzar a siguiente fase
+- ✅ Widget de chat con Claude (flotante, siempre accesible)
+
+### **Vista de Detalles (details.html)**
+- ✅ Edición de contenido por fase
+- ✅ Guardado individual de textos en Drive
+- ✅ Detección de cambios (botón "Guardar" solo si hay modificaciones)
+- ✅ Preview de imágenes desde Drive
+- ✅ **Subida manual de imágenes** (alternativa a generación con IA)
+  - Formatos: PNG, JPG, JPEG
+  - Máximo: 10MB
+  - Sin validación de dimensiones
+  - Preview antes de confirmar
+  - Overlay con spinner durante subida
+- ✅ **Sistema de advertencia para editar fases validadas**
+  - Modal con lista de fases que se resetearán
+  - Botones: "Cancelar" (vuelve al panel) / "Continuar" (permite editar)
+  - Reseteo automático de fases dependientes al guardar
+- ✅ Chat integrado en cada fase para mejoras con IA
+
+### **Chat con Claude**
+- ✅ Conversación persistente (se mantiene entre aperturas)
+- ✅ Historial de mensajes
+- ✅ Herramientas MCP disponibles:
+  - `create_post()` - Crear nuevo post
+  - `list_posts()` - Listar posts existentes
+  - `update_image_prompt()` - Actualizar prompt sin regenerar
+  - `update_video_script()` - Actualizar script de video
+  - `regenerate_image()` - Actualizar prompt Y marcar para regenerar imagen
+- ✅ System prompt optimizado (breve, ejecutivo, proactivo)
+- ✅ Confirmación explícita antes de guardar cambios
+- ✅ Feedback visual de acciones ejecutadas
+
+### **Mejora de Prompts con IA**
+- ✅ Botón "✨ Mejorar con IA" en Fase 3 (Prompt Imagen) y Fase 6 (Script Video)
+- ✅ Botón "🔄 Regenerar con IA" en Fase 4 (Imagen ya generada)
+- ✅ Botón "📤 Reemplazar con mi Imagen" en Fase 4
+- ✅ Contexto automático: Claude recibe el contenido actual
+- ✅ Flujo conversacional: Claude pregunta qué mejorar
+- ✅ Regeneración inteligente: Si cambias prompt, se resetean fases posteriores
+
+### **Subida Manual de Imágenes**
+**Fase 3 (Prompt de Imagen):**
+- Opción "— O —" para subir imagen propia
+- Evita necesidad de generar con IA
+- Crea prompt placeholder con metadatos
+
+**Fase 4 (Imagen Generada):**
+- Botón "Reemplazar con mi Imagen"
+- Útil si la IA no generó lo esperado
+- Reemplaza imagen y prompt
+
+**Flujo:**
+1. Click "Seleccionar Imagen"
+2. Preview de la imagen
+3. Validación: formato (PNG/JPG) y tamaño (<10MB)
+4. Click "Confirmar y Subir"
+5. Overlay con spinner: "Guardando en Google Drive..."
+6. Imagen se guarda como `imagen_base.png`
+7. Prompt placeholder se crea automáticamente
+8. Checkboxes se actualizan
+9. Estado cambia a `IMAGE_BASE_AWAITING`
+
+### **Edición de Fases Validadas**
+**Problema resuelto:** Antes no podías volver a editar fases ya completadas.
+
+**Solución implementada:**
+1. Todas las fases (validadas o no) tienen botón "Ver Detalles"
+2. Al abrir una fase validada, aparece modal de advertencia
+3. Modal muestra qué fases se resetearán si guardas cambios
+4. Usuario decide: "Cancelar" o "Continuar"
+5. Si continúa y guarda, se resetean automáticamente las fases dependientes
+
+**Mapeo de dependencias:**
+```
+Fase 1 (Texto Base) → Resetea: 2, 3, 4, 5, 6, 7, 8
+Fase 2 (Textos Adaptados) → No resetea nada
+Fase 3 (Prompt Imagen) → Resetea: 4, 5
+Fase 4 (Imagen Base) → Resetea: 5
+Fase 5 (Formatos Imagen) → No resetea nada
+Fase 6 (Script Video) → Resetea: 7, 8
+Fase 7 (Video Base) → Resetea: 8
+Fase 8 (Formatos Video) → No resetea nada
+```
+
+**Ejemplo:**
+- Tienes Fase 3, 4 y 5 validadas ✅
+- Quieres cambiar el prompt de imagen (Fase 3)
+- Click "Ver Detalles" en Fase 3
+- Modal: "⚠️ Se resetearán: Fase 4 (Imagen Base), Fase 5 (Formatos)"
+- Click "Continuar"
+- Editas el prompt
+- Click "Guardar"
+- Backend resetea automáticamente:
+  - `image_base = FALSE`
+  - `instagram_image = FALSE` (y demás formatos)
+  - Estado vuelve a `IMAGE_PROMPT_AWAITING`
+- Mensaje: "✅ Cambios guardados. Fases posteriores reseteadas."
+- Vuelves al panel y haces VALIDATE para regenerar
+
+---
+
 ## 📋 ROADMAP - PRÓXIMOS PASOS
 
-### ✅ FASE ACTUAL: FUNDAMENTOS (COMPLETADO)
+### ✅ FASE ACTUAL: PANEL WEB OPERATIVO (COMPLETADO)
 - [x] Blog Hugo funcionando en producción
 - [x] Estructura de carpetas en Google Drive
 - [x] MCP de Google Drive configurado
 - [x] Google Sheet con estructura completa
 - [x] README.md con workflow definitivo
 - [x] Proyecto Google Cloud con APIs habilitadas
+- [x] Panel web HTML + CSS + JavaScript funcionando
+- [x] Backend Flask con API REST completa
+- [x] Integración con Google Sheets y Drive
+- [x] Chat con Claude para crear y mejorar contenido
+- [x] Sistema de validación y edición de fases completadas
+- [x] Subida manual de imágenes (alternativa a IA)
+- [x] Regeneración de prompts con IA
+- [x] Reseteo automático de fases dependientes
 
 ---
 
-### 🔧 PASO 1: PREPARAR ESTRUCTURA LOCAL (PRÓXIMO)
+### 🎯 PRÓXIMOS PASOS
 
-**1.1 Crear carpetas en el repo local**
-```bash
-cd ~/lavelo-blog
-mkdir -p panel/css panel/js
-mkdir -p api/routes
-mkdir scripts
-mkdir config
-```
+### 🔧 PASO 1: GENERACIÓN AUTOMÁTICA DE CONTENIDO (PRÓXIMO)
 
-**1.2 Crear .gitignore actualizado**
-```
-# Credenciales (NO SUBIR)
-config/.env
-config/credentials.json
-config/*.json
+**Objetivo:** Implementar botones VALIDATE que ejecuten scripts de generación automática.
 
-# Python
-__pycache__/
-*.pyc
-venv/
-.venv/
+**1.1 Implementar generación de textos adaptados**
+- Script que lee `base.txt` desde Drive
+- Llama a Claude API para adaptar a cada red social
+- Guarda 5 archivos: instagram.txt, linkedin.txt, twitter.txt, facebook.txt, tiktok.txt
+- Actualiza checkboxes en Sheet
+- Cambia estado a `ADAPTED_TEXTS_AWAITING`
 
-# Hugo
-public/
-.hugo_build.lock
-resources/_gen/
-```
-
-**1.3 Commit y push estructura**
-```bash
-git add .gitignore panel/ api/ scripts/ config/.gitignore
-git commit -m "Add panel structure and scripts folders"
-git push origin main
-```
-
----
-
-### 🎨 PASO 2: CREAR PANEL WEB BÁSICO
-
-**2.1 Crear panel/index.html**
-- Dashboard visual con estado actual
-- Botones para cada fase
-- Enlaces a Drive
-- Visor de progreso
-
-**2.2 Crear panel/css/style.css**
-- Diseño responsive
-- Colores según estados
-- Iconos para cada fase
-
-**2.3 Crear panel/js/app.js**
-- Leer estado desde API
-- Ejecutar acciones con clicks
-- Refrescar automáticamente
-- Mostrar notificaciones
-
----
-
-### 🐍 PASO 3: CREAR API BACKEND
-
-**3.1 Instalar dependencias en servidor**
-```bash
-# En Plesk/servidor
-python3 -m venv venv
-source venv/bin/activate
-pip install flask google-auth google-api-python-client anthropic pillow
-```
-
-**3.2 Crear api/server.py**
-- Endpoints REST para cada acción
-- Autenticación básica
-- Manejo de errores
-- Logging
-
-**3.3 Crear api/routes/**
-- `sheets.py` - Leer/escribir Google Sheets
-- `generate.py` - Ejecutar scripts de generación
-- `drive.py` - Subir/leer archivos de Drive
-
----
-
-### 📜 PASO 4: CREAR SCRIPTS DE AUTOMATIZACIÓN
-
-**4.1 scripts/generate_texts.py**
-- Llama a Claude API
-- Genera textos adaptados desde base.txt
-- Sube a Drive
+**1.2 Implementar generación de prompt de imagen**
+- Lee `base.txt` desde Drive
+- Claude genera prompt optimizado (<900 caracteres)
+- Guarda `prompt_imagen.txt` en Drive
 - Actualiza Sheet
 
-**4.2 scripts/generate_images.py**
-- Llama a Nano Banana API
-- Genera imagen desde prompt
-- Sube a Drive
+**1.3 Implementar generación de imagen base**
+- Lee `prompt_imagen.txt`
+- Llama a DALL-E 3 / Gemini API
+- Guarda `imagen_base.png` (1024x1024)
 - Actualiza Sheet
 
-**4.3 scripts/generate_videos.py**
+**1.4 Implementar formateo de imágenes**
+- Lee `imagen_base.png`
+- Usa Pillow para generar 5 formatos:
+  - instagram_1x1.png (1080x1080)
+  - instagram_stories_9x16.png (1080x1920)
+  - linkedin_16x9.png (1200x627)
+  - twitter_16x9.png (1200x675)
+  - facebook_16x9.png (1200x630)
+- Guarda en Drive
+- Actualiza Sheet
+
+**1.5 Implementar generación de script de video**
+- Lee `base.txt`
+- Claude genera script de 15 seg con 4 escenas
+- Guarda `script_video.txt`
+- Actualiza Sheet
+
+**1.6 Implementar generación de video base**
+- Lee `script_video.txt`
 - Llama a Veo 3.1 API
-- Genera video base
-- Sube a Drive
+- Genera video 16:9, 1080p, 15 seg
+- Guarda `video_base.mp4`
 - Actualiza Sheet
 
-**4.4 scripts/formatters.py**
-- `format_images()` - ImageMagick para crops
-- `format_videos()` - ffmpeg para recortes
-- Guarda todos los formatos en Drive
+**1.7 Implementar formateo de videos**
+- Lee `video_base.mp4`
+- Usa FFmpeg para generar 4 formatos:
+  - feed_16x9.mp4 (1920x1080)
+  - stories_9x16.mp4 (1080x1920, crop)
+  - shorts_9x16.mp4 (1080x1920, crop)
+  - tiktok_9x16.mp4 (1080x1920, crop)
+- Guarda en Drive
+- Actualiza Sheet
 
-**4.5 scripts/publishers.py**
-- `publish_blog()` - Crea .md, compila Hugo, push Git
-- `publish_instagram()` - Graph API
-- `publish_linkedin()` - LinkedIn API
-- `publish_twitter()` - Twitter API v2
-- `publish_facebook()` - Graph API
-- `publish_tiktok()` - TikTok API
+---
+
+### 🚀 PASO 2: PUBLICACIÓN AUTOMÁTICA
+
+**Objetivo:** Implementar publicación en todas las plataformas desde el panel.
+
+**2.1 Publicación en Blog (Hugo)**
+- Generar archivo .md con frontmatter
+- Copiar imágenes a carpeta static
+- Compilar Hugo (`hugo`)
+- Commit y push a GitHub
+- Webhook a Plesk para deploy
+
+**2.2 Publicación en Instagram**
+- Instagram Graph API
+- Subir imagen + caption
+- Programar publicación
+
+**2.3 Publicación en LinkedIn**
+- LinkedIn API
+- Crear post con imagen
+- Compartir en perfil/página
+
+**2.4 Publicación en Twitter/X**
+- Twitter API v2
+- Tweet con imagen
+- Manejo de hilos si es necesario
+
+**2.5 Publicación en Facebook**
+- Facebook Graph API
+- Post en página
+- Programar publicación
+
+**2.6 Publicación en TikTok**
+- TikTok API
+- Subir video
+- Añadir descripción y hashtags
 
 ---
 
@@ -685,12 +794,41 @@ Require valid-user
 
 ### Para crear un nuevo post:
 
-1. **Habla con Claude** → Desarrolla idea y genera base.txt
-2. **Abre panel web** → https://blog.lavelo.es/panel/
-3. **Sigue el wizard visual** → Click en cada botón según fase
-4. **Valida cada output** → Revisa en Drive antes de siguiente fase
-5. **Programa publicación** → Establece fecha/hora en Sheet
-6. **Click "Publicar"** → Va automáticamente a todas las plataformas
+1. **Abre el panel web** → http://localhost:5001 (desarrollo) o https://blog.lavelo.es/panel/ (producción)
+2. **Click en el chat flotante** → Icono 💬 en la esquina inferior derecha
+3. **Habla con Claude** → "Quiero crear un post sobre [tema]"
+4. **Claude te guía** → Te hace preguntas y genera el contenido
+5. **Confirma creación** → Claude ejecuta `create_post()` y crea carpetas en Drive
+6. **Navega por las fases** → Usa los botones "Ver Detalles" y "VALIDATE"
+7. **Edita si es necesario** → Puedes volver a cualquier fase y editarla
+8. **Mejora con IA** → Usa botones "✨ Mejorar con IA" para optimizar prompts
+9. **Sube imágenes propias** → Alternativa a generación con IA
+10. **Valida cada fase** → Click "VALIDATE" para avanzar
+11. **Publica** → Cuando llegues a READY_TO_PUBLISH, click "Publicar"
+
+### Funcionalidades clave:
+
+**Chat con Claude:**
+- Siempre disponible (icono flotante)
+- Conversación persistente
+- Puede crear posts, listar posts, mejorar prompts
+- Pide confirmación antes de guardar
+
+**Edición de fases validadas:**
+- Puedes volver a cualquier fase completada
+- Sistema de advertencia te avisa qué se reseteará
+- Reseteo automático de fases dependientes
+
+**Subida manual de imágenes:**
+- Alternativa a generación con IA
+- Formatos: PNG, JPG (máx 10MB)
+- Preview antes de confirmar
+- Feedback visual durante subida
+
+**Mejora de prompts con IA:**
+- Botones específicos en cada fase
+- Claude analiza y mejora el contenido
+- Regeneración inteligente de fases posteriores
 
 ---
 
@@ -698,7 +836,7 @@ Require valid-user
 
 **Proyecto:** Lavelo Blog Automation  
 **Inicio:** Octubre 2025  
-**Última actualización:** 21 de octubre de 2025
+**Última actualización:** 23 de octubre de 2025
 
 **Google Cloud:**
 - Proyecto: `lavelo-blog-automation`
@@ -723,109 +861,3 @@ Require valid-user
 8. **Accesibilidad:** Panel web disponible desde cualquier dispositivo
 9. **Sin dependencias externas:** Todo en el propio servidor
 
----
-
-TRANSICIONES Y ACCIONES
-0 → 1: DRAFT → BASE_TEXT_AWAITING
-Acción manual (fuera del panel):
-
-Usuario crea base.txt en Drive con Claude
-Usuario marca columna I = TRUE en Excel
-Usuario marca columna F = BASE_TEXT_AWAITING
-1 → 2: BASE_TEXT_AWAITING → ADAPTED_TEXTS_AWAITING
-Acción automática:
-
-Leer base.txt de Drive
-Llamar Claude API con prompt: "Adapta este texto para Instagram, LinkedIn, Twitter, Facebook, TikTok"
-Guardar 5 archivos en Drive: instagram.txt, linkedin.txt, twitter.txt, facebook.txt, tiktok.txt
-Marcar columnas J-N = TRUE
-Cambiar columna F = ADAPTED_TEXTS_AWAITING
-2 → 3: ADAPTED_TEXTS_AWAITING → IMAGE_PROMPT_AWAITING
-Acción automática:
-
-Leer base.txt de Drive
-Llamar Claude API con prompt: "Genera un prompt para crear una imagen que represente este contenido"
-Guardar prompt_imagen.txt en Drive
-Marcar columna O = TRUE
-Cambiar columna F = IMAGE_PROMPT_AWAITING
-3 → 4: IMAGE_PROMPT_AWAITING → IMAGE_BASE_AWAITING
-Acción automática:
-
-Leer prompt_imagen.txt de Drive
-Llamar Gemini/DALL-E API para generar imagen
-Guardar imagen_base.png en Drive
-Marcar columna P = TRUE
-Cambiar columna F = IMAGE_BASE_AWAITING
-4 → 5: IMAGE_BASE_AWAITING → IMAGE_FORMATS_AWAITING
-Acción automática:
-
-Leer imagen_base.png de Drive
-Redimensionar a 5 formatos:
-instagram_1x1.png (1080x1080)
-instagram_stories.png (1080x1920)
-linkedin.png (1200x627)
-twitter.png (1200x675)
-facebook.png (1200x630)
-Guardar en Drive
-Marcar columnas Q-U = TRUE
-Cambiar columna F = IMAGE_FORMATS_AWAITING
-5 → 6: IMAGE_FORMATS_AWAITING → VIDEO_PROMPT_AWAITING
-Acción automática:
-
-Leer base.txt de Drive
-Llamar Claude API con prompt: "Genera un script de video de 15 seg con 4 escenas sobre este tema"
-Guardar script_video.txt en Drive
-Marcar columna V = TRUE
-Cambiar columna F = VIDEO_PROMPT_AWAITING
-6 → 7: VIDEO_PROMPT_AWAITING → VIDEO_BASE_AWAITING
-Acción automática:
-
-Leer script_video.txt + imagen_base.png de Drive
-Llamar API de video (Veo 3.1 o alternativa)
-Generar video base (16x9, 15 seg, 4 escenas)
-Guardar video_base.mp4 en Drive
-Marcar columna W = TRUE
-Cambiar columna F = VIDEO_BASE_AWAITING
-7 → 8: VIDEO_BASE_AWAITING → VIDEO_FORMATS_AWAITING
-Acción automática:
-
-Leer video_base.mp4 de Drive
-Subir a Cloudinary
-Generar 4 formatos con AI smart reframing (gravity: auto:subject):
-feed_16x9.mp4 (1920x1080)
-stories_9x16.mp4 (1080x1920)
-shorts_9x16.mp4 (1080x1920)
-tiktok_9x16.mp4 (1080x1920)
-Descargar y guardar en Drive
-Marcar columnas X-AA = TRUE
-Cambiar columna F = VIDEO_FORMATS_AWAITING
-8 → 9: VIDEO_FORMATS_AWAITING → READY_TO_PUBLISH
-Acción automática:
-
-Verificar que todos los archivos existen en Drive
-Cambiar columna F = READY_TO_PUBLISH
-9 → 10: READY_TO_PUBLISH → PUBLISHED
-Acción semi-automática:
-
-Publicar en Blog (Hugo)
-Publicar en Instagram (API)
-Publicar en LinkedIn (API)
-Publicar en Twitter (API)
-Publicar en Facebook (API)
-Publicar en TikTok (API)
-Marcar columnas AB-AF = TRUE
-Cambiar columna F = PUBLISHED
-📊 RESUMEN:
-Transición	Tipo	Herramienta	Tiempo estimado
-0→1	Manual	Claude chat	10-20 min
-1→2	Auto	Claude API	30 seg
-2→3	Auto	Claude API	15 seg
-3→4	Auto	Gemini API	30 seg
-4→5	Auto	Python/PIL	5 seg
-5→6	Auto	Claude API	15 seg
-6→7	Auto	API video	2-5 min
-7→8	Auto	FFmpeg	30 seg
-8→9	Auto	Validación	1 seg
-9→10	Semi-auto	APIs redes	1 min
-
-**📌 IMPORTANTE:** Este documento es la fuente de verdad del proyecto. Claude debe leer este README al comenzar cualquier sesión de trabajo en el proyecto Lavelo Blog para mantener el contexto completo del sistema.

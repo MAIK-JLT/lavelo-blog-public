@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lavelo Blog - Panel de Control</title>
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/chat.css">
 </head>
 <body>
     <div class="container">
@@ -18,7 +19,49 @@
         </header>
 
         <div class="post-info" id="post-info">
-            <h2>Cargando información del post...</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="margin: 0;">Cargando información del post...</h2>
+                <button class="delete-post-btn" onclick="deletePost()" title="Eliminar este post">
+                    🗑️ Eliminar Post
+                </button>
+            </div>
+        </div>
+
+        <!-- Filtro de Redes Sociales -->
+        <div class="networks-filter" id="networks-filter">
+            <h3>📱 Redes Sociales</h3>
+            <p style="font-size: 0.9em; color: #666; margin-bottom: 10px;">
+                Selecciona las redes para las que quieres generar contenido
+            </p>
+            <p id="networks-warning" style="display: none; font-size: 0.85em; color: #dc3545; margin-bottom: 10px;">
+                ⚠️ No puedes cambiar las redes después de generar contenido (Fase 2+)
+            </p>
+            <div class="networks-checkboxes">
+                <label class="network-checkbox">
+                    <input type="checkbox" id="network-blog" value="blog" checked disabled>
+                    <span>📝 Blog</span>
+                </label>
+                <label class="network-checkbox">
+                    <input type="checkbox" id="network-instagram" value="instagram">
+                    <span>📸 Instagram</span>
+                </label>
+                <label class="network-checkbox">
+                    <input type="checkbox" id="network-linkedin" value="linkedin">
+                    <span>💼 LinkedIn</span>
+                </label>
+                <label class="network-checkbox">
+                    <input type="checkbox" id="network-twitter" value="twitter">
+                    <span>🐦 Twitter</span>
+                </label>
+                <label class="network-checkbox">
+                    <input type="checkbox" id="network-facebook" value="facebook">
+                    <span>👥 Facebook</span>
+                </label>
+                <label class="network-checkbox">
+                    <input type="checkbox" id="network-tiktok" value="tiktok">
+                    <span>🎵 TikTok</span>
+                </label>
+            </div>
         </div>
 
         <div class="progress-bar">
@@ -27,6 +70,31 @@
 
         <div class="phases" id="phases">
             <!-- Las fases se cargarán dinámicamente desde JavaScript -->
+        </div>
+        
+        <!-- Widget de Chat con IA -->
+        <button class="chat-fab" onclick="toggleChat()" title="Chat con IA">
+            💬
+        </button>
+        
+        <div id="chat-modal" class="chat-modal" style="display: none;">
+            <div class="chat-header">
+                <h3>✨ Asistente IA</h3>
+                <button class="chat-close" onclick="toggleChat()">✕</button>
+            </div>
+            <div id="chat-messages" class="chat-messages">
+                <!-- Mensajes del chat -->
+            </div>
+            <div class="chat-input-container">
+                <input 
+                    type="text" 
+                    id="chat-input" 
+                    class="chat-input" 
+                    placeholder="Escribe tu mensaje..."
+                    autocomplete="off"
+                >
+                <button class="chat-send" onclick="sendChatMessage()">Enviar</button>
+            </div>
         </div>
 
         <div class="actions" id="actions">
@@ -40,5 +108,6 @@
     </div>
 
     <script src="js/app.js"></script>
+    <script src="js/chat.js"></script>
 </body>
 </html>

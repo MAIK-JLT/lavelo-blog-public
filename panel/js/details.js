@@ -1,9 +1,15 @@
+// Configuración
+const API_BASE = '/api';
+
 // Estado global
 let currentPost = null;
+let phaseIsValidated = false;
+let userConfirmedEdit = false;
 
 // Obtener parámetros de URL
 const urlParams = new URLSearchParams(window.location.search);
 const codigo = urlParams.get('codigo');
+const estadoOverride = urlParams.get('estado'); // Estado específico a mostrar (para fases validadas)
 
 // Cargar post al iniciar
 document.addEventListener('DOMContentLoaded', () => {
@@ -48,8 +54,18 @@ async function cargarPost() {
 
 // Cargar contenido según la fase actual
 async function cargarContenidoFase() {
-    const estado = currentPost.estado;
+    // Usar estadoOverride si existe (para fases validadas), si no, usar el estado del post
+    const estado = estadoOverride || currentPost.estado;
     const phaseContent = document.getElementById('phase-content');
+    
+    // Detectar si la fase está validada (viene de una fase completada)
+    phaseIsValidated = estadoOverride ? isPhaseValidated(estado) : false;
+    
+    // Si está validada y el usuario no ha confirmado, mostrar advertencia
+    if (phaseIsValidated && !userConfirmedEdit) {
+        showEditWarning(estado);
+        return;
+    }
     
     try {
         switch (estado) {
@@ -171,7 +187,26 @@ async function renderImagePromptPhase() {
                 <textarea id="prompt-editor" class="content-editor" data-original="${escapeHtml(promptText || '')}" style="min-height: 150px;">${promptText || ''}</textarea>
                 <div class="save-btn-container">
                     <button class="save-btn" id="save-prompt_imagen" onclick="guardarTextoIndividual('prompt_imagen', 'prompt-editor')">💾 Guardar Prompt</button>
+                    <button class="ai-btn" onclick="mejorarConIA('prompt_imagen', 'prompt-editor')">✨ Mejorar con IA</button>
                     <span class="save-status" id="status-prompt_imagen">✅ Guardado</span>
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0; color: #999; font-weight: bold;">— O —</div>
+            
+            <div class="text-item">
+                <h3>📤 Subir tu Propia Imagen</h3>
+                <p style="color: #666; margin-bottom: 15px;">Si ya tienes una imagen, súbela directamente sin necesidad de generar con IA.</p>
+                <div style="text-align: center;">
+                    <input type="file" id="upload-image-input" accept="image/png,image/jpeg,image/jpg" style="display: none;" onchange="handleImageUpload(event)">
+                    <button class="ai-btn" onclick="document.getElementById('upload-image-input').click()">⬆️ Seleccionar Imagen</button>
+                    <p style="color: #999; font-size: 0.85em; margin-top: 10px;">Formatos: PNG, JPG • Máximo: 10MB</p>
+                </div>
+                <div id="upload-preview" style="margin-top: 15px; display: none;">
+                    <img id="preview-img" style="max-width: 300px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                    <p id="preview-info" style="color: #666; font-size: 0.9em; margin-top: 10px;"></p>
+                    <button class="ai-btn" onclick="confirmarSubidaImagen()" style="margin-top: 10px;">✅ Confirmar y Subir</button>
+                    <button class="btn-secondary" onclick="cancelarSubidaImagen()" style="margin-top: 10px; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer;">❌ Cancelar</button>
                 </div>
             </div>
         </div>
@@ -188,16 +223,34 @@ async function renderImageBasePhase() {
     // Construir URL de la imagen en Drive
     const imageUrl = `/api/drive/image?codigo=${codigo}&folder=imagenes&filename=${codigo}_imagen_base.png`;
     
+    // Obtener el prompt usado
+    const promptText = await fetchFileFromDrive('textos', `${codigo}_prompt_imagen.txt`);
+    
     phaseContent.innerHTML = `
         <div class="phase-section">
             <h2 class="phase-title">🖼️ Imagen Base Generada</h2>
-            <p style="color: #666; margin-bottom: 20px;">Revisa la imagen generada. Si no te gusta, vuelve al panel principal y regenera desde la fase anterior.</p>
+            <p style="color: #666; margin-bottom: 20px;">Revisa la imagen generada. Si no te gusta, puedes mejorar el prompt con IA y regenerarla.</p>
             <div class="text-item">
                 <h3>📸 Imagen Base (1024x1024)</h3>
                 <div style="text-align: center; padding: 20px;">
                     <img src="${imageUrl}" alt="Imagen base" style="max-width: 100%; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);" onerror="this.src=''; this.alt='Error cargando imagen';">
                 </div>
-                <p style="color: #666; font-size: 0.9em; text-align: center; margin-top: 10px;">Si la imagen es correcta, vuelve al panel y haz clic en VALIDATE para generar los formatos.</p>
+                <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                    <h4 style="margin-bottom: 10px;">Prompt usado:</h4>
+                    <p style="color: #666; font-size: 0.9em; line-height: 1.6;">${promptText || 'No disponible'}</p>
+                </div>
+                <input type="file" id="upload-image-input-fase4" accept="image/png,image/jpeg,image/jpg" style="display: none;" onchange="handleImageUploadFase4(event)">
+                <div style="text-align: center; margin-top: 20px;">
+                    <button class="ai-btn" onclick="regenerarImagenConIA()">🔄 Regenerar con IA</button>
+                    <button class="ai-btn" onclick="reemplazarImagenManual()" style="margin-left: 10px;">📤 Reemplazar con mi Imagen</button>
+                </div>
+                <div id="upload-preview-fase4" style="margin-top: 15px; display: none; text-align: center;">
+                    <img id="preview-img-fase4" style="max-width: 300px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-top: 10px;">
+                    <p id="preview-info-fase4" style="color: #666; font-size: 0.9em; margin-top: 10px;"></p>
+                    <button class="ai-btn" onclick="confirmarSubidaImagenFase4()" style="margin-top: 10px;">✅ Confirmar y Reemplazar</button>
+                    <button class="btn-secondary" onclick="cancelarSubidaImagenFase4()" style="margin-top: 10px; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer;">❌ Cancelar</button>
+                </div>
+                <p style="color: #666; font-size: 0.9em; text-align: center; margin-top: 15px;">Si la imagen es correcta, vuelve al panel y haz clic en VALIDATE para generar los formatos.</p>
             </div>
         </div>
     `;
@@ -292,6 +345,7 @@ async function renderVideoPromptPhase() {
                 <textarea id="script-editor" class="content-editor" data-original="${escapeHtml(scriptText || '')}" style="min-height: 250px;">${scriptText || ''}</textarea>
                 <div class="save-btn-container">
                     <button class="save-btn" id="save-script_video" onclick="guardarTextoIndividual('script_video', 'script-editor')">💾 Guardar Script</button>
+                    <button class="ai-btn" onclick="mejorarConIA('script_video', 'script-editor')">✨ Mejorar con IA</button>
                     <span class="save-status" id="status-script_video">✅ Guardado</span>
                 </div>
             </div>
@@ -492,6 +546,23 @@ async function guardarTextoIndividual(tipo, editorId) {
         editor.dataset.original = content;
         editor.classList.remove('modified');
         
+        // Resetear fases dependientes si es prompt de imagen o script de video
+        // (siempre, no solo si está validada)
+        const shouldReset = tipo === 'prompt_imagen' || tipo === 'script_video' || tipo === 'base';
+        
+        if (shouldReset || (phaseIsValidated && userConfirmedEdit)) {
+            // Determinar el estado correcto según el tipo de archivo editado
+            let estadoParaReset = currentPost.estado;
+            if (tipo === 'base') {
+                estadoParaReset = 'BASE_TEXT_AWAITING';
+            } else if (tipo === 'prompt_imagen') {
+                estadoParaReset = 'IMAGE_PROMPT_AWAITING';
+            } else if (tipo === 'script_video') {
+                estadoParaReset = 'VIDEO_PROMPT_AWAITING';
+            }
+            await resetDependentPhases(estadoParaReset);
+        }
+        
         // Mostrar confirmación
         saveBtn.classList.remove('show');
         status.classList.add('show');
@@ -572,4 +643,385 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML.replace(/"/g, '&quot;');
+}
+
+// Mejorar contenido con IA
+function mejorarConIA(tipo, editorId) {
+    // 1. Obtener contenido actual
+    const textarea = document.getElementById(editorId);
+    const contenidoActual = textarea.value;
+    
+    if (!contenidoActual || contenidoActual.trim() === '') {
+        alert('No hay contenido para mejorar. Por favor, genera primero el contenido.');
+        return;
+    }
+    
+    // 2. Abrir chat
+    if (typeof toggleChat === 'function') {
+        toggleChat();
+    }
+    
+    // 3. Preparar mensaje contextual
+    const tipoTexto = tipo === 'prompt_imagen' ? 'prompt de imagen' : 'script de video';
+    const mensaje = `Quiero mejorar el ${tipoTexto} del post ${codigo}.
+
+Contenido actual:
+${contenidoActual}
+
+¿Puedes ayudarme a mejorarlo?`;
+    
+    // 4. Enviar al chat después de un pequeño delay para que se abra
+    setTimeout(() => {
+        const chatInput = document.getElementById('chat-input');
+        if (chatInput) {
+            chatInput.value = mensaje;
+            // Auto-enviar el mensaje
+            if (typeof sendChatMessage === 'function') {
+                sendChatMessage();
+            }
+        }
+    }, 300);
+}
+
+// Regenerar imagen con IA (desde Fase 4)
+async function regenerarImagenConIA() {
+    // Obtener el prompt actual
+    const promptText = await fetchFileFromDrive('textos', `${codigo}_prompt_imagen.txt`);
+    
+    if (!promptText) {
+        alert('No se pudo cargar el prompt actual.');
+        return;
+    }
+    
+    // Abrir chat
+    if (typeof toggleChat === 'function') {
+        toggleChat();
+    }
+    
+    // Mensaje contextual
+    const mensaje = `La imagen generada para el post ${codigo} no me convence.
+
+Prompt actual usado:
+${promptText}
+
+¿Puedes ayudarme a mejorarlo para regenerar una imagen mejor?`;
+    
+    // Enviar al chat
+    setTimeout(() => {
+        const chatInput = document.getElementById('chat-input');
+        if (chatInput) {
+            chatInput.value = mensaje;
+            if (typeof sendChatMessage === 'function') {
+                sendChatMessage();
+            }
+        }
+    }, 300);
+}
+
+// ============================================
+// SUBIDA MANUAL DE IMÁGENES
+// ============================================
+
+let selectedImageFile = null;
+
+// FASE 3: Manejar selección de imagen
+function handleImageUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    // Validar formato
+    const validTypes = ['image/png', 'image/jpeg', 'image/jpg'];
+    if (!validTypes.includes(file.type)) {
+        alert('Formato no válido. Usa PNG o JPG.');
+        return;
+    }
+    
+    // Validar tamaño (10MB)
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+        alert('Archivo muy grande. Máximo 10MB.');
+        return;
+    }
+    
+    selectedImageFile = file;
+    
+    // Mostrar preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        document.getElementById('preview-img').src = e.target.result;
+        document.getElementById('preview-info').textContent = `${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
+        document.getElementById('upload-preview').style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+}
+
+function cancelarSubidaImagen() {
+    selectedImageFile = null;
+    document.getElementById('upload-image-input').value = '';
+    document.getElementById('upload-preview').style.display = 'none';
+}
+
+async function confirmarSubidaImagen() {
+    if (!selectedImageFile) {
+        alert('No hay imagen seleccionada');
+        return;
+    }
+    
+    // Mostrar overlay
+    showUploadOverlay('Subiendo imagen...', 'Guardando en Google Drive, por favor espera...');
+    
+    const formData = new FormData();
+    formData.append('image', selectedImageFile);
+    
+    try {
+        const response = await fetch(`${API_BASE}/posts/${codigo}/upload-image`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        hideUploadOverlay();
+        
+        if (result.success) {
+            showSuccess(result.message);
+            setTimeout(() => {
+                location.reload();
+            }, 2000);
+        } else {
+            showError(result.error || 'Error subiendo imagen');
+        }
+    } catch (error) {
+        hideUploadOverlay();
+        showError('Error de conexión: ' + error.message);
+    }
+}
+
+// FASE 4: Reemplazar imagen
+function reemplazarImagenManual() {
+    document.getElementById('upload-image-input-fase4').click();
+}
+
+function handleImageUploadFase4(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    // Validar formato
+    const validTypes = ['image/png', 'image/jpeg', 'image/jpg'];
+    if (!validTypes.includes(file.type)) {
+        alert('Formato no válido. Usa PNG o JPG.');
+        return;
+    }
+    
+    // Validar tamaño (10MB)
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+        alert('Archivo muy grande. Máximo 10MB.');
+        return;
+    }
+    
+    selectedImageFile = file;
+    
+    // Mostrar preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        document.getElementById('preview-img-fase4').src = e.target.result;
+        document.getElementById('preview-info-fase4').textContent = `${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
+        document.getElementById('upload-preview-fase4').style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+}
+
+function cancelarSubidaImagenFase4() {
+    selectedImageFile = null;
+    document.getElementById('upload-image-input-fase4').value = '';
+    document.getElementById('upload-preview-fase4').style.display = 'none';
+}
+
+async function confirmarSubidaImagenFase4() {
+    if (!selectedImageFile) {
+        alert('No hay imagen seleccionada');
+        return;
+    }
+    
+    // Mostrar overlay
+    showUploadOverlay('Reemplazando imagen...', 'Guardando en Google Drive, por favor espera...');
+    
+    const formData = new FormData();
+    formData.append('image', selectedImageFile);
+    
+    try {
+        const response = await fetch(`${API_BASE}/posts/${codigo}/upload-image`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        hideUploadOverlay();
+        
+        if (result.success) {
+            showSuccess(result.message);
+            setTimeout(() => {
+                location.reload();
+            }, 2000);
+        } else {
+            showError(result.error || 'Error reemplazando imagen');
+        }
+    } catch (error) {
+        hideUploadOverlay();
+        showError('Error de conexión: ' + error.message);
+    }
+}
+
+// Funciones para mostrar/ocultar overlay de subida
+function showUploadOverlay(title, message) {
+    document.getElementById('upload-title').textContent = title;
+    document.getElementById('upload-message').textContent = message;
+    document.getElementById('upload-overlay').classList.add('show');
+}
+
+function hideUploadOverlay() {
+    document.getElementById('upload-overlay').classList.remove('show');
+}
+
+// ============================================
+// ADVERTENCIA PARA EDITAR FASE VALIDADA
+// ============================================
+
+// Mapeo de estados a número de fase
+const stateToPhase = {
+    'BASE_TEXT_AWAITING': 1,
+    'ADAPTED_TEXTS_AWAITING': 2,
+    'IMAGE_PROMPT_AWAITING': 3,
+    'IMAGE_BASE_AWAITING': 4,
+    'IMAGE_FORMATS_AWAITING': 5,
+    'VIDEO_PROMPT_AWAITING': 6,
+    'VIDEO_BASE_AWAITING': 7,
+    'VIDEO_FORMATS_AWAITING': 8
+};
+
+// Detectar si una fase está validada (viene de fase posterior)
+function isPhaseValidated(estado) {
+    const currentPhaseNum = stateToPhase[estado];
+    if (!currentPhaseNum) return false;
+    
+    // Verificar si hay fases posteriores completadas
+    // Por ahora, asumimos que si el estado actual es menor que el estado real del post, está validado
+    // Esto lo detectaremos mejor cuando tengamos el estado completo del post
+    
+    // Por simplicidad, verificamos los checkboxes del post
+    const post = currentPost;
+    
+    switch (estado) {
+        case 'BASE_TEXT_AWAITING':
+            return post.base_text === 'TRUE';
+        case 'ADAPTED_TEXTS_AWAITING':
+            return post.instagram_text === 'TRUE' || post.linkedin_text === 'TRUE';
+        case 'IMAGE_PROMPT_AWAITING':
+            return post.image_prompt === 'TRUE';
+        case 'IMAGE_BASE_AWAITING':
+            return post.image_base === 'TRUE';
+        case 'IMAGE_FORMATS_AWAITING':
+            return post.instagram_image === 'TRUE';
+        case 'VIDEO_PROMPT_AWAITING':
+            return post.video_prompt === 'TRUE';
+        case 'VIDEO_BASE_AWAITING':
+            return post.video_base === 'TRUE';
+        case 'VIDEO_FORMATS_AWAITING':
+            return post.instagram_video === 'TRUE';
+        default:
+            return false;
+    }
+}
+
+// Mapeo de fases que se resetearán
+const resetMap = {
+    'BASE_TEXT_AWAITING': [
+        'Fase 2: Textos Adaptados',
+        'Fase 3: Prompt Imagen',
+        'Fase 4: Imagen Base',
+        'Fase 5: Formatos Imagen',
+        'Fase 6: Script Video',
+        'Fase 7: Video Base',
+        'Fase 8: Formatos Video'
+    ],
+    'ADAPTED_TEXTS_AWAITING': [], // No resetea nada
+    'IMAGE_PROMPT_AWAITING': [
+        'Fase 4: Imagen Base',
+        'Fase 5: Formatos Imagen'
+    ],
+    'IMAGE_BASE_AWAITING': [
+        'Fase 5: Formatos Imagen'
+    ],
+    'IMAGE_FORMATS_AWAITING': [],
+    'VIDEO_PROMPT_AWAITING': [
+        'Fase 7: Video Base',
+        'Fase 8: Formatos Video'
+    ],
+    'VIDEO_BASE_AWAITING': [
+        'Fase 8: Formatos Video'
+    ],
+    'VIDEO_FORMATS_AWAITING': []
+};
+
+// Mostrar advertencia antes de editar
+function showEditWarning(estado) {
+    const resetPhases = resetMap[estado] || [];
+    
+    if (resetPhases.length === 0) {
+        // No hay fases que resetear, permitir edición directamente
+        userConfirmedEdit = true;
+        cargarContenidoFase();
+        return;
+    }
+    
+    // Mostrar modal con lista de fases que se resetearán
+    const resetList = document.getElementById('reset-list');
+    resetList.innerHTML = resetPhases.map(phase => `<li>${phase}</li>`).join('');
+    
+    document.getElementById('warning-modal').style.display = 'flex';
+}
+
+// Cancelar edición
+function cancelWarning() {
+    document.getElementById('warning-modal').style.display = 'none';
+    // Volver al panel principal
+    window.location.href = '/';
+}
+
+// Confirmar edición
+function confirmEdit() {
+    userConfirmedEdit = true;
+    document.getElementById('warning-modal').style.display = 'none';
+    cargarContenidoFase();
+}
+
+// Resetear fases dependientes (llamado después de guardar)
+async function resetDependentPhases(estadoParaReset) {
+    try {
+        // Si no se proporciona estado, usar el del post actual
+        const estado = estadoParaReset || currentPost.estado;
+        
+        console.log(`🔄 Reseteando fases dependientes de: ${estado}`);
+        
+        const response = await fetch(`${API_BASE}/posts/${codigo}/reset-phases`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ estado: estado })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            console.log('✅ Fases dependientes reseteadas');
+            // Mostrar notificación
+            showSuccess('Cambios guardados. Fases posteriores han sido reseteadas.');
+        } else {
+            console.error('❌ Error reseteando fases:', result.error);
+        }
+        
+    } catch (error) {
+        console.error('❌ Error en resetDependentPhases:', error);
+    }
 }

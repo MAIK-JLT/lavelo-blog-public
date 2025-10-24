@@ -95,7 +95,7 @@ class SheetsService:
                 try:
                     result = self.service.spreadsheets().values().get(
                         spreadsheetId=SPREADSHEET_ID,
-                        range=f'{sheet_name}!A2:AH'  # Leer todas las columnas hasta AH
+                        range=f'{sheet_name}!A2:AP'  # Leer todas las columnas hasta AP (incluye redes)
                     ).execute()
                     print(f"✅ Hoja encontrada: {sheet_name}")
                     break
@@ -113,8 +113,9 @@ class SheetsService:
                 # Mapeo según el orden REAL del Excel
                 # A=Fecha, B=Hora, C=Código, D=Título, E=Idea, F=ESTADO, G=Drive ID, H=URLs
                 # I=base.txt, J=instagram.txt, K=linkedin.txt, L=twitter.txt, M=facebook.txt, N=tiktok.txt
-                # O=prompt_imagen, P=imagen_base, Q-T=formatos imagen, U=script_video, V=video_base, W-Z=formatos video
-                # AA-AF=publicaciones, AG=fecha_real, AH=notas
+                # O=prompt_imagen, P=imagen_base, Q-U=formatos imagen, V=script_video, W=video_base, X-AA=formatos video
+                # AB-AG=publicaciones, AH=fecha_real, AI=notas, AJ=feedback
+                # AK-AP=redes sociales activas (instagram, linkedin, twitter, facebook, tiktok, blog)
                 
                 post = {
                     'codigo': row[2] if len(row) > 2 else '',  # C
@@ -156,7 +157,25 @@ class SheetsService:
                         (row[32] if len(row) > 32 else 'FALSE') == 'TRUE'   # TikTok
                     ]) else 'FALSE',
                     'publication_date': row[33] if len(row) > 33 else '',
-                    'notes': row[34] if len(row) > 34 else ''
+                    'notes': row[34] if len(row) > 34 else '',
+                    # Campos individuales para validación selectiva
+                    'instagram_text': row[9] if len(row) > 9 else 'FALSE',
+                    'linkedin_text': row[10] if len(row) > 10 else 'FALSE',
+                    'twitter_text': row[11] if len(row) > 11 else 'FALSE',
+                    'facebook_text': row[12] if len(row) > 12 else 'FALSE',
+                    'tiktok_text': row[13] if len(row) > 13 else 'FALSE',
+                    'instagram_image': row[16] if len(row) > 16 else 'FALSE',
+                    'instagram_stories_image': row[17] if len(row) > 17 else 'FALSE',
+                    'linkedin_image': row[18] if len(row) > 18 else 'FALSE',
+                    'twitter_image': row[19] if len(row) > 19 else 'FALSE',
+                    'facebook_image': row[20] if len(row) > 20 else 'FALSE',
+                    # Redes sociales activas (AK-AP = columnas 36-41)
+                    'redes_instagram': row[36] if len(row) > 36 else 'TRUE',  # AK
+                    'redes_linkedin': row[37] if len(row) > 37 else 'TRUE',   # AL
+                    'redes_twitter': row[38] if len(row) > 38 else 'TRUE',    # AM
+                    'redes_facebook': row[39] if len(row) > 39 else 'TRUE',   # AN
+                    'redes_tiktok': row[40] if len(row) > 40 else 'TRUE',     # AO
+                    'redes_blog': row[41] if len(row) > 41 else 'TRUE'        # AP
                 }
                 
                 # Usar el estado directamente de la columna F del Excel
@@ -203,8 +222,20 @@ class SheetsService:
                 'adapted_texts_tiktok': 'N',     # ☑ tiktok.txt
                 'image_prompt': 'O',  # ☑ prompt_imagen_base.txt
                 'image_base': 'P',    # ☑ imagen_base.png
-                'video_prompt': 'U',  # ☑ script_video_base.txt
-                'video_base': 'V',    # ☑ video_base.mp4
+                'instagram_image': 'Q',  # ☑ instagram_1x1.png
+                'instagram_stories_image': 'R',  # ☑ instagram_stories_9x16.png
+                'linkedin_image': 'S',  # ☑ linkedin_16x9.png
+                'twitter_image': 'T',  # ☑ twitter_16x9.png
+                'facebook_image': 'U',  # ☑ facebook_16x9.png
+                'video_prompt': 'V',  # ☑ script_video_base.txt
+                'video_base': 'W',    # ☑ video_base.mp4
+                # Redes sociales activas
+                'redes_instagram': 'AK',  # ☑ Instagram activo
+                'redes_linkedin': 'AL',   # ☑ LinkedIn activo
+                'redes_twitter': 'AM',    # ☑ Twitter activo
+                'redes_facebook': 'AN',   # ☑ Facebook activo
+                'redes_tiktok': 'AO',     # ☑ TikTok activo
+                'redes_blog': 'AP',       # ☑ Blog activo
             }
             
             column = field_to_column.get(field)
@@ -228,6 +259,115 @@ class SheetsService:
         
         except HttpError as error:
             print(f'❌ Error al actualizar Google Sheets: {error}')
+            return False
+    
+    def batch_update_networks(self, codigo, redes):
+        """Actualizar todas las redes sociales en una sola llamada batch"""
+        try:
+            # Buscar fila del post
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=SPREADSHEET_ID,
+                range='Sheet1!C2:C'
+            ).execute()
+            
+            rows = result.get('values', [])
+            row_index = None
+            
+            for i, row in enumerate(rows):
+                if row and row[0] == codigo:
+                    row_index = i + 2
+                    break
+            
+            if row_index is None:
+                print(f'❌ Post {codigo} no encontrado')
+                return False
+            
+            # Mapeo de redes a columnas
+            network_columns = {
+                'instagram': 'AK',
+                'linkedin': 'AL',
+                'twitter': 'AM',
+                'facebook': 'AN',
+                'tiktok': 'AO',
+                'blog': 'AP'
+            }
+            
+            # Preparar datos para batch update
+            data = []
+            for network, active in redes.items():
+                column = network_columns.get(network)
+                if column:
+                    value = 'TRUE' if active else 'FALSE'
+                    data.append({
+                        'range': f'Sheet1!{column}{row_index}',
+                        'values': [[value]]
+                    })
+            
+            # Ejecutar batch update (1 sola llamada API)
+            body = {
+                'valueInputOption': 'RAW',
+                'data': data
+            }
+            
+            self.service.spreadsheets().values().batchUpdate(
+                spreadsheetId=SPREADSHEET_ID,
+                body=body
+            ).execute()
+            
+            print(f'✅ Redes actualizadas en batch para {codigo}')
+            return True
+            
+        except HttpError as error:
+            print(f'❌ Error en batch update: {error}')
+            return False
+    
+    def reset_dependent_phases(self, codigo, current_estado):
+        """Resetear fases dependientes cuando se edita una fase validada"""
+        try:
+            print(f"🔄 Reseteando fases dependientes de {current_estado}")
+            
+            # Mapeo de qué fases resetear según la fase actual
+            reset_map = {
+                'BASE_TEXT_AWAITING': [
+                    'adapted_texts_instagram', 'adapted_texts_linkedin', 
+                    'adapted_texts_twitter', 'adapted_texts_facebook', 'adapted_texts_tiktok',
+                    'image_prompt', 'image_base',
+                    'instagram_image', 'instagram_stories_image', 'linkedin_image', 'twitter_image', 'facebook_image',
+                    'video_prompt', 'video_base'
+                ],
+                'ADAPTED_TEXTS_AWAITING': [],  # No resetea nada
+                'IMAGE_PROMPT_AWAITING': [
+                    'image_base',
+                    'instagram_image', 'instagram_stories_image', 'linkedin_image', 'twitter_image', 'facebook_image'
+                ],
+                'IMAGE_BASE_AWAITING': [
+                    'instagram_image', 'instagram_stories_image', 'linkedin_image', 'twitter_image', 'facebook_image'
+                ],
+                'IMAGE_FORMATS_AWAITING': [],
+                'VIDEO_PROMPT_AWAITING': ['video_base'],
+                'VIDEO_BASE_AWAITING': [],
+                'VIDEO_FORMATS_AWAITING': []
+            }
+            
+            fields_to_reset = reset_map.get(current_estado, [])
+            
+            if not fields_to_reset:
+                print("✅ No hay fases dependientes que resetear")
+                return True
+            
+            # Resetear cada campo a FALSE
+            for field in fields_to_reset:
+                self.update_post_field(codigo, field, 'FALSE')
+                print(f"  ↳ {field} = FALSE")
+            
+            # Actualizar estado al actual (para forzar recálculo)
+            self.update_post_field(codigo, 'estado', current_estado)
+            
+            print(f"✅ Fases dependientes reseteadas")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error reseteando fases: {e}")
             return False
     
     def _excel_to_panel_state(self, post):
