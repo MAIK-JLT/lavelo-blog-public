@@ -178,6 +178,47 @@ async function renderImagePromptPhase() {
     
     const promptText = await fetchFileFromDrive('textos', `${codigo}_prompt_imagen.txt`);
     
+    // Intentar cargar metadata de referencias
+    const metadataText = await fetchFileFromDrive('textos', `${codigo}_referencias_metadata.json`);
+    let referencesHTML = '';
+    
+    if (metadataText) {
+        try {
+            const metadata = JSON.parse(metadataText);
+            if (metadata.references && metadata.references.length > 0) {
+                referencesHTML = `
+                    <div class="text-item" style="background: #f0f9ff; border-left-color: #3b82f6;">
+                        <h3>🖼️ Imágenes de Referencia</h3>
+                        <p style="color: #666; margin-bottom: 15px;">Estas imágenes se usarán como guía en la generación:</p>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                            ${metadata.references.map((ref, idx) => {
+                                // Usar URL directa de Drive si existe, sino usar proxy
+                                const imageUrl = ref.drive_url || `${API_BASE}/drive/image?codigo=${codigo}&folder=imagenes&filename=${encodeURIComponent(ref.filename)}`;
+                                return `
+                                <div style="text-align: center;">
+                                    <img src="${imageUrl}" 
+                                         style="max-width: 100%; border-radius: 8px; border: 2px solid #ddd; margin-bottom: 8px; background: #f5f5f5;"
+                                         onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
+                                         alt="Referencia ${idx + 1}">
+                                    <div style="display:none; padding:20px; background:#fee; border-radius:8px; color:#c00;">
+                                        ⚠️ Error cargando imagen
+                                    </div>
+                                    <p style="font-size: 13px; color: #666; margin: 0;">
+                                        <strong>Referencia ${idx + 1}</strong><br>
+                                        ${ref.label}<br>
+                                        <small style="color:#999;">${ref.filename}</small>
+                                    </p>
+                                </div>
+                            `}).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+        } catch (e) {
+            console.error('Error parseando metadata de referencias:', e);
+        }
+    }
+    
     phaseContent.innerHTML = `
         <div class="phase-section">
             <h2 class="phase-title">🎨 Prompt de Imagen</h2>
@@ -188,9 +229,12 @@ async function renderImagePromptPhase() {
                 <div class="save-btn-container">
                     <button class="save-btn" id="save-prompt_imagen" onclick="guardarTextoIndividual('prompt_imagen', 'prompt-editor')">💾 Guardar Prompt</button>
                     <button class="ai-btn" onclick="mejorarConIA('prompt_imagen', 'prompt-editor')">✨ Mejorar con IA</button>
+                    <button class="ai-btn" onclick="abrirPromptBuilder('${escapeHtml(promptText || '')}')" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">🎨 Mejorar con Imagen</button>
                     <span class="save-status" id="status-prompt_imagen">✅ Guardado</span>
                 </div>
             </div>
+            
+            ${referencesHTML}
             
             <div style="text-align: center; margin: 30px 0; color: #999; font-weight: bold;">— O —</div>
             
@@ -220,40 +264,165 @@ async function renderImageBasePhase() {
     const phaseContent = document.getElementById('phase-content');
     phaseContent.innerHTML = '<div class="loading"><div class="spinner"></div><p>Cargando imagen base...</p></div>';
     
-    // Construir URL de la imagen en Drive
-    const imageUrl = `/api/drive/image?codigo=${codigo}&folder=imagenes&filename=${codigo}_imagen_base.png`;
-    
     // Obtener el prompt usado
     const promptText = await fetchFileFromDrive('textos', `${codigo}_prompt_imagen.txt`);
     
-    phaseContent.innerHTML = `
-        <div class="phase-section">
-            <h2 class="phase-title">🖼️ Imagen Base Generada</h2>
-            <p style="color: #666; margin-bottom: 20px;">Revisa la imagen generada. Si no te gusta, puedes mejorar el prompt con IA y regenerarla.</p>
-            <div class="text-item">
-                <h3>📸 Imagen Base (1024x1024)</h3>
-                <div style="text-align: center; padding: 20px;">
-                    <img src="${imageUrl}" alt="Imagen base" style="max-width: 100%; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);" onerror="this.src=''; this.alt='Error cargando imagen';">
-                </div>
-                <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
-                    <h4 style="margin-bottom: 10px;">Prompt usado:</h4>
+    // Verificar si ya existe imagen_base.png
+    const imageExists = await checkImageExists('imagenes', `${codigo}_imagen_base.png`);
+    
+    if (!imageExists) {
+        // No hay imagen generada, mostrar botón GENERATE
+        phaseContent.innerHTML = `
+            <div class="phase-section">
+                <h2 class="phase-title">🎨 Generar Imagen Base</h2>
+                <p style="color: #666; margin-bottom: 20px;">Genera la imagen base usando IA con el prompt y referencias de la Fase 3.</p>
+                
+                <div style="margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                    <h4 style="margin-bottom: 10px;">📝 Prompt a usar:</h4>
                     <p style="color: #666; font-size: 0.9em; line-height: 1.6;">${promptText || 'No disponible'}</p>
                 </div>
-                <input type="file" id="upload-image-input-fase4" accept="image/png,image/jpeg,image/jpg" style="display: none;" onchange="handleImageUploadFase4(event)">
-                <div style="text-align: center; margin-top: 20px;">
-                    <button class="ai-btn" onclick="regenerarImagenConIA()">🔄 Regenerar con IA</button>
-                    <button class="ai-btn" onclick="reemplazarImagenManual()" style="margin-left: 10px;">📤 Reemplazar con mi Imagen</button>
+                
+                <div style="text-align: center; margin: 30px 0;">
+                    <button class="ai-btn" onclick="generateImageWithAI()" style="font-size: 1.1em; padding: 15px 40px;">
+                        🚀 GENERAR IMAGEN CON IA
+                    </button>
+                    <p style="color: #999; font-size: 0.85em; margin-top: 10px;">Se generarán 4 variaciones usando SeaDream 4.0</p>
                 </div>
-                <div id="upload-preview-fase4" style="margin-top: 15px; display: none; text-align: center;">
-                    <img id="preview-img-fase4" style="max-width: 300px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-top: 10px;">
-                    <p id="preview-info-fase4" style="color: #666; font-size: 0.9em; margin-top: 10px;"></p>
-                    <button class="ai-btn" onclick="confirmarSubidaImagenFase4()" style="margin-top: 10px;">✅ Confirmar y Reemplazar</button>
-                    <button class="btn-secondary" onclick="cancelarSubidaImagenFase4()" style="margin-top: 10px; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer;">❌ Cancelar</button>
+                
+                <div id="generation-progress" style="display: none; text-align: center; margin: 20px 0;">
+                    <div class="spinner"></div>
+                    <p style="color: #666; margin-top: 10px;">Generando imágenes... Esto puede tardar 30-60 segundos.</p>
                 </div>
-                <p style="color: #666; font-size: 0.9em; text-align: center; margin-top: 15px;">Si la imagen es correcta, vuelve al panel y haz clic en VALIDATE para generar los formatos.</p>
+                
+                <div id="generated-images" style="margin-top: 30px;"></div>
             </div>
-        </div>
-    `;
+        `;
+    } else {
+        // Imagen ya existe, mostrar preview
+        const imageUrl = `/api/drive/image?codigo=${codigo}&folder=imagenes&filename=${codigo}_imagen_base.png`;
+        
+        phaseContent.innerHTML = `
+            <div class="phase-section">
+                <h2 class="phase-title">🖼️ Imagen Base Generada</h2>
+                <p style="color: #666; margin-bottom: 20px;">Revisa la imagen generada. Si no te gusta, puedes regenerarla.</p>
+                <div class="text-item">
+                    <h3>📸 Imagen Base (1024x1024)</h3>
+                    <div style="text-align: center; padding: 20px;">
+                        <img src="${imageUrl}" alt="Imagen base" style="max-width: 100%; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);" onerror="this.src=''; this.alt='Error cargando imagen';">
+                    </div>
+                    <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                        <h4 style="margin-bottom: 10px;">Prompt usado:</h4>
+                        <p style="color: #666; font-size: 0.9em; line-height: 1.6;">${promptText || 'No disponible'}</p>
+                    </div>
+                    <input type="file" id="upload-image-input-fase4" accept="image/png,image/jpeg,image/jpg" style="display: none;" onchange="handleImageUploadFase4(event)">
+                    <div style="text-align: center; margin-top: 20px;">
+                        <button class="ai-btn" onclick="regenerarImagenConIA()">🔄 Regenerar con IA</button>
+                        <button class="ai-btn" onclick="generateVariationsWithFalAI()" style="margin-left: 10px;">🎨 Generar 4 Variaciones (Fal.ai)</button>
+                        <button class="ai-btn" onclick="reemplazarImagenManual()" style="margin-left: 10px;">📤 Reemplazar con mi Imagen</button>
+                    </div>
+                    <div id="fal-variations-container" style="margin-top: 30px; display: none;">
+                        <h3 style="text-align: center; margin-bottom: 20px;">🎨 Variaciones Generadas con Fal.ai</h3>
+                        <div id="fal-variations-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 20px;"></div>
+                        <p style="text-align: center; color: #666; font-size: 0.9em;">Haz click en una variación para usarla como imagen base</p>
+                    </div>
+                    <div id="upload-preview-fase4" style="margin-top: 15px; display: none; text-align: center;">
+                        <img id="preview-img-fase4" style="max-width: 300px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-top: 10px;">
+                        <p id="preview-info-fase4" style="color: #666; font-size: 0.9em; margin-top: 10px;"></p>
+                        <button class="ai-btn" onclick="confirmarSubidaImagenFase4()" style="margin-top: 10px;">✅ Confirmar y Reemplazar</button>
+                        <button class="btn-secondary" onclick="cancelarSubidaImagenFase4()" style="margin-top: 10px; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer;">❌ Cancelar</button>
+                    </div>
+                    <p style="color: #666; font-size: 0.9em; text-align: center; margin-top: 15px;">Si la imagen es correcta, vuelve al panel y haz clic en VALIDATE para generar los formatos.</p>
+                </div>
+            </div>
+        `;
+    }
+}
+
+// Función para verificar si una imagen existe (usando metadata en vez de proxy)
+async function checkImageExists(folder, filename) {
+    try {
+        // Intentar leer desde Drive API directamente (más confiable que proxy)
+        const response = await fetch(`${API_BASE}/drive/file-exists?codigo=${codigo}&folder=${folder}&filename=${filename}`);
+        if (response.ok) {
+            const result = await response.json();
+            return result.exists;
+        }
+        return false;
+    } catch (error) {
+        console.error('Error verificando imagen:', error);
+        return false;
+    }
+}
+
+// Función para generar imagen con IA
+async function generateImageWithAI() {
+    const progressDiv = document.getElementById('generation-progress');
+    const generateBtn = document.querySelector('button[onclick="generateImageWithAI()"]');
+    const generatedImagesDiv = document.getElementById('generated-images');
+    
+    if (generateBtn) generateBtn.disabled = true;
+    if (progressDiv) progressDiv.style.display = 'block';
+    if (generatedImagesDiv) generatedImagesDiv.innerHTML = '';
+    
+    try {
+        const response = await fetch(`${API_BASE}/generate-image`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({codigo: codigo})
+        });
+        
+        const result = await response.json();
+        
+        if (progressDiv) progressDiv.style.display = 'none';
+        
+        if (result.success) {
+            // Mostrar las 4 variaciones generadas
+            let imagesHTML = '<h3 style="text-align: center; margin-bottom: 20px;">✅ Imágenes Generadas - Selecciona una</h3>';
+            imagesHTML += '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">';
+            
+            result.images.forEach((img, idx) => {
+                const imageUrl = `/api/drive/image?codigo=${codigo}&folder=imagenes&filename=${img.filename}`;
+                imagesHTML += `
+                    <div style="text-align: center; padding: 15px; border: 2px solid #ddd; border-radius: 10px; cursor: pointer;" onclick="selectGeneratedImage('${img.filename}', ${idx})">
+                        <img src="${imageUrl}" style="width: 100%; border-radius: 8px;" alt="Variación ${idx + 1}">
+                        <p style="margin-top: 10px; color: #666;">Variación ${idx + 1}</p>
+                    </div>
+                `;
+            });
+            
+            imagesHTML += '</div>';
+            imagesHTML += '<p style="text-align: center; color: #666; margin-top: 20px;">Haz click en la imagen que prefieras para usarla como base.</p>';
+            
+            if (generatedImagesDiv) generatedImagesDiv.innerHTML = imagesHTML;
+            
+            showNotification(`${result.images.length} imágenes generadas correctamente`, 'success');
+        } else {
+            throw new Error(result.error || 'Error desconocido');
+        }
+    } catch (error) {
+        if (progressDiv) progressDiv.style.display = 'none';
+        if (generateBtn) generateBtn.disabled = false;
+        showNotification(`Error generando imagen: ${error.message}`, 'error');
+    }
+}
+
+// Función para seleccionar una imagen generada
+async function selectGeneratedImage(filename, index) {
+    if (!confirm(`¿Usar la Variación ${index + 1} como imagen base?`)) return;
+    
+    try {
+        // Si no es la primera (imagen_base.png), renombrarla
+        if (filename !== `${codigo}_imagen_base.png`) {
+            // Aquí podrías implementar un endpoint para renombrar, o simplemente recargar
+            showNotification('Imagen seleccionada. Recargando...', 'success');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showNotification('Imagen base ya seleccionada', 'success');
+            setTimeout(() => location.reload(), 1000);
+        }
+    } catch (error) {
+        showNotification(`Error: ${error.message}`, 'error');
+    }
 }
 
 // FASE 5: IMAGE_FORMATS_AWAITING
@@ -718,6 +887,108 @@ ${promptText}
     }, 300);
 }
 
+// Generar 4 variaciones con Fal.ai (desde Fase 4)
+async function generateVariationsWithFalAI() {
+    console.log('🎨 Iniciando generación de variaciones con Fal.ai...');
+    
+    try {
+        const container = document.getElementById('fal-variations-container');
+        const grid = document.getElementById('fal-variations-grid');
+        const btn = document.querySelector('button[onclick="generateVariationsWithFalAI()"]');
+        
+        console.log('Container:', container);
+        console.log('Grid:', grid);
+        console.log('Button:', btn);
+        
+        const confirmResult = confirm('¿Generar 4 variaciones con Fal.ai? Esto costará ~$0.12 (4 imágenes × $0.03)');
+        console.log('Confirm result:', confirmResult);
+        
+        if (!confirmResult) {
+            console.log('Usuario canceló');
+            return;
+        }
+        
+        // Deshabilitar botón y mostrar loading
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = '⏳ Generando...';
+        }
+        
+        if (container) container.style.display = 'none';
+        if (grid) grid.innerHTML = '';
+        
+        console.log('Llamando a API...');
+        alert('Generando 4 variaciones con Fal.ai... Esto puede tardar 30-60 segundos.');
+        
+        const response = await fetch(`${API_BASE}/generate-image`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({codigo: codigo})
+        });
+        
+        console.log('Response status:', response.status);
+        const result = await response.json();
+        console.log('Result:', result);
+        
+        if (result.success && result.images) {
+            // Mostrar las 4 variaciones en grid
+            let gridHTML = '';
+            
+            result.images.forEach((img, idx) => {
+                const imageUrl = `/api/drive/image?codigo=${codigo}&folder=imagenes&filename=${img.filename}`;
+                gridHTML += `
+                    <div style="text-align: center; padding: 15px; border: 2px solid #ddd; border-radius: 10px; cursor: pointer; transition: all 0.3s;" 
+                         onclick="selectFalVariation('${img.filename}', ${idx + 1})"
+                         onmouseover="this.style.borderColor='#7c3aed'; this.style.transform='scale(1.02)'"
+                         onmouseout="this.style.borderColor='#ddd'; this.style.transform='scale(1)'">
+                        <img src="${imageUrl}" style="width: 100%; border-radius: 8px;" alt="Variación ${idx + 1}">
+                        <p style="margin-top: 10px; color: #666; font-weight: bold;">Variación ${idx + 1}</p>
+                    </div>
+                `;
+            });
+            
+            if (grid) grid.innerHTML = gridHTML;
+            if (container) container.style.display = 'block';
+            
+            alert(`✅ ${result.images.length} variaciones generadas. Haz click en una para usarla.`);
+        } else {
+            throw new Error(result.error || 'Error desconocido');
+        }
+    } catch (error) {
+        console.error('❌ Error generando variaciones:', error);
+        alert(`❌ Error: ${error.message}`);
+    } finally {
+        const btn = document.querySelector('button[onclick="generateVariationsWithFalAI()"]');
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = '🎨 Generar 4 Variaciones (Fal.ai)';
+        }
+    }
+}
+
+// Seleccionar una variación de Fal.ai para usarla como imagen base
+async function selectFalVariation(filename, variationNumber) {
+    if (!confirm(`¿Usar la Variación ${variationNumber} como imagen base?\n\nEsto reemplazará la imagen actual.`)) {
+        return;
+    }
+    
+    try {
+        showNotification('Aplicando variación...', 'info');
+        
+        // Si no es la primera (imagen_base.png), necesitamos renombrarla
+        if (filename !== `${codigo}_imagen_base.png`) {
+            // Crear endpoint para renombrar o simplemente recargar
+            // Por ahora, simplemente recargamos para que el usuario vea la seleccionada
+            showNotification(`✅ Variación ${variationNumber} seleccionada. Recargando...`, 'success');
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showNotification('✅ Esta ya es la imagen base actual', 'success');
+        }
+    } catch (error) {
+        showNotification(`❌ Error: ${error.message}`, 'error');
+    }
+}
+
 // ============================================
 // SUBIDA MANUAL DE IMÁGENES
 // ============================================
@@ -1024,4 +1295,19 @@ async function resetDependentPhases(estadoParaReset) {
     } catch (error) {
         console.error('❌ Error en resetDependentPhases:', error);
     }
+}
+
+// ============================================
+// PROMPT BUILDER VISUAL
+// ============================================
+
+function abrirPromptBuilder(promptActual) {
+    // Construir URL con parámetros
+    const params = new URLSearchParams({
+        codigo: codigo,
+        prompt: promptActual || ''
+    });
+    
+    // Abrir en nueva ventana
+    window.open(`prompt_builder.html?${params.toString()}`, '_blank', 'width=1200,height=800');
 }

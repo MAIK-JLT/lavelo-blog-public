@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PromptBuilder • Selección visual completa (en español)</title>
+<style>
+  :root{--bg:#0f1115;--panel:#171a21;--muted:#8b93a7;--text:#e7ecf3;--accent:#7dd3fc;--accent-2:#a78bfa;--chip:#222633;--chip-active:#2d3344;--ring:#60a5fa;}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Inter,"Helvetica Neue",Arial;background:var(--bg);color:var(--text)}
+  .wrap{max-width:1150px;margin:24px auto;padding:0 16px}
+  h1{font-size:24px;margin-bottom:16px}
+  .grid{display:grid;gap:12px}
+  .g-6{grid-template-columns:repeat(6,minmax(0,1fr))}
+  .panel{background:var(--panel);border:1px solid #232838;border-radius:14px;padding:14px;margin-bottom:16px}
+  .tile{position:relative;cursor:pointer;border-radius:12px;overflow:hidden;border:1px solid #262b3b;background:#111520}
+  .tile svg{display:block;width:100%;height:110px}
+  .tile .lbl{position:absolute;left:8px;bottom:8px;padding:3px 8px;border-radius:8px;background:rgba(17,21,32,.8);font-size:12px;color:#dbeafe}
+  .tile.selected{outline:2px solid var(--ring);box-shadow:0 0 0 4px rgba(96,165,250,.18) inset}
+  .tile[title]:hover::after,.chip[title]:hover::after{content:attr(title);position:absolute;bottom:120%;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.85);color:#fff;padding:6px 8px;border-radius:6px;font-size:12px;white-space:nowrap;pointer-events:none;z-index:20}
+  .chip{display:inline-block;margin:4px;padding:6px 10px;border-radius:999px;background:#222633;color:#cbd5e1;cursor:pointer;position:relative}
+  .chip.selected{background:var(--chip-active);color:var(--accent);font-weight:600}
+  .prompt-current{background:#1a1f2e;padding:16px;border-radius:10px;margin-bottom:20px;border:1px solid #2d3344}
+  .prompt-current h3{margin:0 0 10px 0;color:var(--accent);font-size:16px}
+  .prompt-current p{margin:0;color:var(--muted);font-size:14px;line-height:1.6}
+  .actions{display:flex;gap:12px;justify-content:center;margin-top:24px;padding:20px;background:var(--panel);border-radius:14px;border:1px solid #232838}
+  .btn{padding:12px 32px;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;transition:all 0.2s}
+  .btn-primary{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff}
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(102,126,234,0.4)}
+  .btn-secondary{background:#374151;color:#e5e7eb}
+  .btn-secondary:hover{background:#4b5563}
+  .loading-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);display:none;justify-content:center;align-items:center;z-index:9999}
+  .loading-overlay.show{display:flex}
+  .spinner{width:50px;height:50px;border:4px solid #333;border-top:4px solid var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+  @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+  .image-upload-zone{border:2px dashed #2d3344;border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:all 0.3s;background:#1a1f2e}
+  .image-upload-zone:hover{border-color:var(--accent);background:#1e2430}
+  .image-upload-zone input[type="file"]{display:none}
+  .image-upload-zone label{cursor:pointer;color:var(--muted);font-size:14px;display:block}
+  .image-preview{margin-top:16px;padding:16px;background:#1a1f2e;border-radius:10px;display:none}
+  .image-preview.show{display:block}
+  .image-preview img{max-width:100%;max-height:200px;border-radius:8px;border:2px solid #2d3344}
+  .image-preview .remove-btn{margin-top:12px;padding:8px 16px;background:#dc2626;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px}
+  .image-preview .remove-btn:hover{background:#b91c1c}
+  .influence-options{margin-top:12px;display:flex;gap:12px;justify-content:center}
+  .influence-radio{display:none}
+  .influence-label{padding:8px 16px;background:#222633;color:#cbd5e1;border-radius:6px;cursor:pointer;font-size:13px;transition:all 0.2s}
+  .influence-radio:checked + .influence-label{background:var(--accent);color:#0f1115;font-weight:600}
+  .reference-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎨 PromptBuilder — Mejora Visual de Prompts</h1>
+  
+  <!-- Prompt Actual -->
+  <div class="prompt-current">
+    <h3>📝 Prompt Actual</h3>
+    <p id="current-prompt">Cargando...</p>
+  </div>
+  
+  <!-- Imágenes de Referencia -->
+  <div class="panel">
+    <h2>🖼️ Imágenes de Referencia (Opcional)</h2>
+    <p style="color:var(--muted);font-size:14px;margin-bottom:16px">
+      Sube hasta 2 imágenes para guiar el estilo, composición o elementos específicos
+    </p>
+    
+    <div class="reference-grid">
+      <!-- Referencia 1 -->
+      <div>
+        <h3 style="font-size:15px;margin-bottom:12px;color:var(--text)">Referencia 1</h3>
+        <div class="image-upload-zone" onclick="document.getElementById('ref1-input').click()">
+          <input type="file" id="ref1-input" accept="image/*" onchange="handleImageUpload(1, event)">
+          <label>📤 Click para subir imagen</label>
+        </div>
+        <div id="ref1-preview" class="image-preview">
+          <img id="ref1-img" alt="Referencia 1">
+          <div class="influence-options">
+            <input type="radio" id="ref1-insp" name="ref1-influence" value="0.5" class="influence-radio" checked>
+            <label for="ref1-insp" class="influence-label">💡 Inspiración</label>
+            
+            <input type="radio" id="ref1-guide" name="ref1-influence" value="1.0" class="influence-radio">
+            <label for="ref1-guide" class="influence-label">🎯 Guía</label>
+            
+            <input type="radio" id="ref1-exact" name="ref1-influence" value="2.0" class="influence-radio">
+            <label for="ref1-exact" class="influence-label">🔒 Exacta</label>
+          </div>
+          <button class="remove-btn" onclick="removeImage(1)">🗑️ Quitar</button>
+        </div>
+      </div>
+      
+      <!-- Referencia 2 -->
+      <div>
+        <h3 style="font-size:15px;margin-bottom:12px;color:var(--text)">Referencia 2</h3>
+        <div class="image-upload-zone" onclick="document.getElementById('ref2-input').click()">
+          <input type="file" id="ref2-input" accept="image/*" onchange="handleImageUpload(2, event)">
+          <label>📤 Click para subir imagen</label>
+        </div>
+        <div id="ref2-preview" class="image-preview">
+          <img id="ref2-img" alt="Referencia 2">
+          <div class="influence-options">
+            <input type="radio" id="ref2-insp" name="ref2-influence" value="0.5" class="influence-radio" checked>
+            <label for="ref2-insp" class="influence-label">💡 Inspiración</label>
+            
+            <input type="radio" id="ref2-guide" name="ref2-influence" value="1.0" class="influence-radio">
+            <label for="ref2-guide" class="influence-label">🎯 Guía</label>
+            
+            <input type="radio" id="ref2-exact" name="ref2-influence" value="2.0" class="influence-radio">
+            <label for="ref2-exact" class="influence-label">🔒 Exacta</label>
+          </div>
+          <button class="remove-btn" onclick="removeImage(2)">🗑️ Quitar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <section class="panel" data-group="perspective">
+    <h2>Perspectiva / Punto de vista</h2>
+    <div class="grid g-6" id="grid-perspective"></div>
+  </section>
+  <section class="panel" data-group="lighting">
+    <h2>Iluminación</h2>
+    <div id="chips-lighting"></div>
+  </section>
+  <section class="panel" data-group="style">
+    <h2>Estilo</h2>
+    <div id="chips-style"></div>
+  </section>
+  <section class="panel" data-group="composition">
+    <h2>Composición</h2>
+    <div id="chips-composition"></div>
+  </section>
+  <section class="panel" data-group="camera">
+    <h2>Cámara / Óptica</h2>
+    <div id="chips-camera"></div>
+  </section>
+  <section class="panel" data-group="color">
+    <h2>Color / Paleta</h2>
+    <div id="chips-color"></div>
+  </section>
+  <section class="panel" data-group="texture">
+    <h2>Textura / Material</h2>
+    <div id="chips-texture"></div>
+  </section>
+  <section class="panel" data-group="quality">
+    <h2>Calidad / Detalle</h2>
+    <div id="chips-quality"></div>
+  </section>
+  
+  <!-- Acciones -->
+  <div class="actions">
+    <button class="btn btn-secondary" onclick="volver()">← Volver</button>
+    <button class="btn btn-primary" onclick="aplicarMejoras()">✨ APLICAR</button>
+  </div>
+</div>
+
+<!-- Loading Overlay -->
+<div id="loading-overlay" class="loading-overlay">
+  <div style="text-align:center">
+    <div class="spinner"></div>
+    <p style="color:var(--text);margin-top:16px;font-size:16px">Mejorando prompt con IA...</p>
+  </div>
+</div>
+<script>
+const config={
+  perspective:["Primer plano","Retrato","Plano medio","Cuerpo entero","Vista aérea","Plano general","Vista cenital","Macro","Ángulo bajo","Vista superior"],
+  lighting:["Amanecer","Hora dorada","Atardecer","Noche","Neón","Nublado","Luz de estudio","Luz suave","Luz dramática","Contraluz"],
+  style:["Realista","Cinematográfico","Ilustración","Pintura digital","Render 3D","Fotografía","Pintura al óleo","Minimalista","Cómic","Vintage"],
+  composition:["Cuadrado","Vertical","Horizontal","Panorámico","Centrado","Regla de tercios","Simétrico","Fondo minimalista","Profundidad de campo","Espacio negativo"],
+  camera:["Gran angular","Teleobjetivo","Ojo de pez","Lente macro","Bokeh","Poca profundidad de campo"],
+  color:["Tonos cálidos","Tonos fríos","Blanco y negro","Pastel","Alto contraste","Monocromo"],
+  texture:["Metálico","Mate","Madera","Piedra","Tela","Vidrio","Suave","Rugoso"],
+  quality:["Bajo detalle (low poly)","Alta definición","Ultra realista","Calidad fotográfica","Boceto"]
+};
+
+const tooltips={
+  "Primer plano":"Plano muy cercano que destaca detalles del sujeto.",
+  "Retrato":"Muestra el rostro o parte superior del cuerpo.",
+  "Plano medio":"Desde la cintura hacia arriba.",
+  "Cuerpo entero":"Captura el cuerpo completo.",
+  "Vista aérea":"Toma desde arriba, vista de dron.",
+  "Plano general":"Muestra el entorno completo.",
+  "Vista cenital":"Toma justo desde arriba.",
+  "Macro":"Detalle extremo de un objeto.",
+  "Ángulo bajo":"Toma desde abajo, sensación de poder.",
+  "Vista superior":"Vista superior ligeramente inclinada.",
+  "Amanecer":"Luz cálida y baja del amanecer.",
+  "Hora dorada":"Luz dorada antes del atardecer.",
+  "Atardecer":"Colores cálidos al final del día.",
+  "Noche":"Iluminación artificial o lunar.",
+  "Neón":"Luces intensas y coloridas.",
+  "Nublado":"Luz suave y sin sombras.",
+  "Luz de estudio":"Iluminación controlada.",
+  "Luz suave":"Difusa, sin contrastes.",
+  "Luz dramática":"Contrastes fuertes.",
+  "Contraluz":"Luz detrás del sujeto.",
+  "Realista":"Representación fiel de la realidad.",
+  "Cinematográfico":"Apariencia de película.",
+  "Ilustración":"Dibujo artístico.",
+  "Pintura digital":"Pintura hecha digitalmente.",
+  "Render 3D":"Imagen tridimensional.",
+  "Fotografía":"Aspecto fotográfico.",
+  "Pintura al óleo":"Pintura tradicional.",
+  "Minimalista":"Composición simple y limpia.",
+  "Cómic":"Estilo de historieta.",
+  "Vintage":"Aspecto retro.",
+  "Cuadrado":"Formato cuadrado.",
+  "Vertical":"Formato vertical.",
+  "Horizontal":"Formato horizontal.",
+  "Panorámico":"Vista amplia.",
+  "Centrado":"Sujeto centrado.",
+  "Regla de tercios":"Composición equilibrada.",
+  "Simétrico":"Composición simétrica.",
+  "Fondo minimalista":"Fondo simple.",
+  "Profundidad de campo":"Desenfoque de fondo.",
+  "Espacio negativo":"Espacio vacío para destacar.",
+  "Gran angular":"Lente amplia, más entorno.",
+  "Teleobjetivo":"Lente de largo alcance.",
+  "Ojo de pez":"Lente curva y deformante.",
+  "Lente macro":"Para primeros planos.",
+  "Bokeh":"Desenfoque artístico del fondo.",
+  "Poca profundidad de campo":"Fondo desenfocado.",
+  "Tonos cálidos":"Colores rojizos y amarillos.",
+  "Tonos fríos":"Colores azulados y verdes.",
+  "Blanco y negro":"Sin color, estilo clásico.",
+  "Pastel":"Tonos suaves.",
+  "Alto contraste":"Colores intensos.",
+  "Monocromo":"Un solo tono.",
+  "Metálico":"Superficie brillante.",
+  "Mate":"Sin reflejos.",
+  "Madera":"Textura de madera.",
+  "Piedra":"Apariencia de roca.",
+  "Tela":"Superficie textil.",
+  "Vidrio":"Transparente o reflectante.",
+  "Suave":"Textura lisa.",
+  "Rugoso":"Textura irregular.",
+  "Bajo detalle (low poly)":"Modelo simple.",
+  "Alta definición":"Alta nitidez.",
+  "Ultra realista":"Realismo extremo.",
+  "Calidad fotográfica":"Aspecto natural.",
+  "Boceto":"Dibujo rápido."
+};
+
+function makeSVG(label,variant=0){const grad=["#334155","#1f2937","#0b1220","#111827"][variant%4];const accent=["#93c5fd","#a78bfa","#7dd3fc","#fca5a5"][variant%4];return`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 200'><rect width='320' height='200' fill='${grad}'/><circle cx='${60+variant*40}' cy='${60+variant*12}' r='${24+variant*3}' fill='${accent}' opacity='0.3'/></svg>`}
+function renderTiles(group,mountId){const mount=document.getElementById(mountId);config[group].forEach((label,i)=>{const d=document.createElement('div');d.className='tile';d.dataset.group=group;d.dataset.value=label;d.title=tooltips[label]||'';d.innerHTML=makeSVG(label,i)+`<span class='lbl'>${label}</span>`;mount.appendChild(d)});} 
+function renderChips(group,mountId){const mount=document.getElementById(mountId);config[group].forEach(label=>{const b=document.createElement('span');b.className='chip';b.textContent=label;b.title=tooltips[label]||'';mount.appendChild(b)});} 
+// Estado de selecciones
+const selections = {
+  perspective: null,
+  lighting: null,
+  style: null,
+  composition: null,
+  camera: null,
+  color: null,
+  texture: null,
+  quality: null
+};
+
+// Estado de imágenes de referencia
+const referenceImages = {
+  ref1: { file: null, data: null, influence: 0.5 },
+  ref2: { file: null, data: null, influence: 0.5 }
+};
+
+// Manejar subida de imagen
+function handleImageUpload(refNum, event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  // Validar tipo
+  if (!file.type.startsWith('image/')) {
+    alert('Por favor, sube solo imágenes');
+    return;
+  }
+  
+  // Validar tamaño (5MB)
+  if (file.size > 5 * 1024 * 1024) {
+    alert('Imagen muy grande. Máximo 5MB');
+    return;
+  }
+  
+  const refKey = `ref${refNum}`;
+  referenceImages[refKey].file = file;
+  
+  // Leer y mostrar preview
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    referenceImages[refKey].data = e.target.result;
+    document.getElementById(`${refKey}-img`).src = e.target.result;
+    document.getElementById(`${refKey}-preview`).classList.add('show');
+  };
+  reader.readAsDataURL(file);
+}
+
+// Quitar imagen
+function removeImage(refNum) {
+  const refKey = `ref${refNum}`;
+  referenceImages[refKey] = { file: null, data: null, influence: 0.5 };
+  document.getElementById(`${refKey}-preview`).classList.remove('show');
+  document.getElementById(`${refKey}-input`).value = '';
+  
+  // Reset radio buttons
+  document.getElementById(`${refKey}-insp`).checked = true;
+}
+
+// Parámetros URL
+const urlParams = new URLSearchParams(window.location.search);
+const codigo = urlParams.get('codigo');
+const promptActual = urlParams.get('prompt') || 'No hay prompt actual';
+
+// Mostrar prompt actual
+document.getElementById('current-prompt').textContent = promptActual;
+
+// Renderizar opciones
+['perspective','lighting','style','composition','camera','color','texture','quality'].forEach(g=>{
+  const id=(g==='perspective')?'grid-perspective':`chips-${g}`;
+  if(g==='perspective')renderTiles(g,id); else renderChips(g,id);
+});
+
+// Event listeners para selección
+document.addEventListener('click', (e) => {
+  const tile = e.target.closest('.tile');
+  const chip = e.target.closest('.chip');
+  const element = tile || chip;
+  
+  if (!element) return;
+  
+  const group = element.dataset.group || element.closest('[data-group]')?.dataset.group;
+  if (!group) return;
+  
+  const value = element.dataset.value || element.textContent;
+  
+  // Si ya está seleccionado, deseleccionar
+  if (element.classList.contains('selected')) {
+    element.classList.remove('selected');
+    selections[group] = null;
+    return;
+  }
+  
+  // Deseleccionar otros del mismo grupo
+  const groupElements = document.querySelectorAll(`[data-group="${group}"] .tile, [data-group="${group}"] .chip`);
+  groupElements.forEach(el => el.classList.remove('selected'));
+  
+  // Seleccionar este
+  element.classList.add('selected');
+  selections[group] = value;
+});
+
+// Función APLICAR
+async function aplicarMejoras() {
+  if (!codigo) {
+    alert('Error: No se encontró el código del post');
+    return;
+  }
+  
+  // Verificar que hay al menos una selección O una imagen
+  const hasSelections = Object.values(selections).some(v => v !== null);
+  const hasImages = referenceImages.ref1.file || referenceImages.ref2.file;
+  
+  if (!hasSelections && !hasImages) {
+    alert('Por favor, selecciona al menos una opción visual o sube una imagen de referencia');
+    return;
+  }
+  
+  // Obtener valores de influencia de los radio buttons
+  if (referenceImages.ref1.file) {
+    const ref1Radio = document.querySelector('input[name="ref1-influence"]:checked');
+    referenceImages.ref1.influence = parseFloat(ref1Radio.value);
+  }
+  if (referenceImages.ref2.file) {
+    const ref2Radio = document.querySelector('input[name="ref2-influence"]:checked');
+    referenceImages.ref2.influence = parseFloat(ref2Radio.value);
+  }
+  
+  // Mostrar loading
+  document.getElementById('loading-overlay').classList.add('show');
+  
+  try {
+    // Preparar FormData para enviar imágenes
+    const formData = new FormData();
+    formData.append('codigo', codigo);
+    formData.append('prompt_original', promptActual);
+    formData.append('selections', JSON.stringify(selections));
+    
+    // Agregar imágenes si existen
+    if (referenceImages.ref1.file) {
+      formData.append('ref1', referenceImages.ref1.file);
+      formData.append('ref1_influence', referenceImages.ref1.influence);
+    }
+    if (referenceImages.ref2.file) {
+      formData.append('ref2', referenceImages.ref2.file);
+      formData.append('ref2_influence', referenceImages.ref2.influence);
+    }
+    
+    const response = await fetch('http://localhost:5001/api/improve-prompt-visual', {
+      method: 'POST',
+      body: formData  // No enviar Content-Type, FormData lo maneja automáticamente
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      alert('✅ Prompt mejorado y guardado correctamente!');
+      // Volver a details
+      volver();
+    } else {
+      alert('❌ Error: ' + (result.error || 'Error desconocido'));
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    alert('❌ Error al mejorar el prompt: ' + error.message);
+  } finally {
+    document.getElementById('loading-overlay').classList.remove('show');
+  }
+}
+
+// Función Volver
+function volver() {
+  // Cerrar ventana y recargar la ventana padre (details.html)
+  if (window.opener) {
+    window.opener.location.reload();
+    window.close();
+  } else {
+    // Si no hay opener, navegar a details
+    window.location.href = `details.html?codigo=${codigo}&phase=3`;
+  }
+}
+</script>
+</body>
+</html>

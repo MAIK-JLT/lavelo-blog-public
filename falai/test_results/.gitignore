@@ -1,0 +1,7 @@
+# Ignorar todas las imágenes de prueba
+*.png
+*.jpg
+*.jpeg
+
+# Mantener el .gitkeep
+!.gitkeep

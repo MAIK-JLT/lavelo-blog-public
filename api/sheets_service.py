@@ -74,6 +74,13 @@ class SheetsService:
         except Exception as e:
             print(f"❌ Error guardando token: {e}")
     
+    def ensure_authenticated(self):
+        """Asegurar que los servicios estén autenticados, reinicializando si es necesario"""
+        if self.drive_service is None or self.service is None:
+            print("🔄 Reinicializando servicios de Google...")
+            return self.authenticate()
+        return True
+    
     def get_oauth_flow(self):
         """Crear flujo OAuth2 para autenticación"""
         flow = Flow.from_client_secrets_file(
@@ -548,7 +555,7 @@ class SheetsService:
             return False
     
     def save_image_to_drive(self, folder_id, filename, image_bytes):
-        """Guardar imagen binaria en Google Drive"""
+        """Guardar imagen binaria en Google Drive y devolver file_id"""
         try:
             if not hasattr(self, 'drive_service'):
                 self.drive_service = build('drive', 'v3', credentials=self.creds)
@@ -573,7 +580,7 @@ class SheetsService:
                     fileId=file_id,
                     media_body=media
                 ).execute()
-                print(f"✅ Imagen actualizada: {filename}")
+                print(f"✅ Imagen actualizada: {filename} (ID: {file_id})")
             else:
                 # Crear nuevo archivo
                 file_metadata = {
@@ -581,18 +588,34 @@ class SheetsService:
                     'parents': [folder_id],
                     'mimeType': 'image/png'
                 }
-                self.drive_service.files().create(
+                result = self.drive_service.files().create(
                     body=file_metadata,
                     media_body=media,
                     fields='id'
                 ).execute()
-                print(f"✅ Imagen creada: {filename}")
+                file_id = result.get('id')
+                print(f"✅ Imagen creada: {filename} (ID: {file_id})")
             
-            return True
+            # Hacer el archivo público (anyone with link can view)
+            try:
+                permission = {
+                    'type': 'anyone',
+                    'role': 'reader'
+                }
+                self.drive_service.permissions().create(
+                    fileId=file_id,
+                    body=permission,
+                    fields='id'
+                ).execute()
+                print(f"✅ Permisos públicos configurados para {filename}")
+            except Exception as perm_error:
+                print(f"⚠️ No se pudieron configurar permisos públicos: {perm_error}")
+            
+            return file_id
             
         except Exception as e:
             print(f"❌ Error guardando imagen {filename}: {str(e)}")
-            return False
+            return None
     
     def get_image_from_drive(self, folder_id, filename):
         """Leer imagen desde Google Drive y devolver bytes"""

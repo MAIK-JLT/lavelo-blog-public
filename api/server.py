@@ -1,5 +1,7 @@
 import os
 import time
+import json
+from datetime import datetime
 from flask import Flask, request, jsonify, session, redirect, url_for
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -19,6 +21,8 @@ import cloudinary
 import cloudinary.uploader
 from cloudinary.utils import cloudinary_url
 import tempfile
+import fal_client
+import base64
 
 # Permitir HTTP en desarrollo (solo para localhost)
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
@@ -35,6 +39,15 @@ cloudinary.config(
 app = Flask(__name__, static_folder='../panel', static_url_path='')
 app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
 
+# Servir archivos de la carpeta falai
+from flask import send_from_directory
+
+@app.route('/falai/<path:filename>')
+def serve_falai(filename):
+    """Servir archivos estáticos de la carpeta falai"""
+    falai_dir = os.path.join(os.path.dirname(__file__), '..', 'falai')
+    return send_from_directory(falai_dir, filename)
+
 # Configurar CORS correctamente
 CORS(app, 
      resources={r"/api/*": {
@@ -46,7 +59,13 @@ CORS(app,
 
 # Cache simple para posts (evitar múltiples llamadas simultáneas a Sheets)
 posts_cache = {'data': None, 'timestamp': 0}
-CACHE_TTL = 5  # 5 segundos
+CACHE_TTL = 10  # 10 segundos (aumentado para mayor resiliencia)
+
+def clear_posts_cache():
+    """Limpiar caché de posts"""
+    posts_cache['data'] = None
+    posts_cache['timestamp'] = 0
+    print("🗑️ Caché de posts limpiado")
 
 def get_cached_posts():
     """Obtener posts con cache para evitar múltiples llamadas simultáneas"""
@@ -54,8 +73,17 @@ def get_cached_posts():
     current_time = time.time()
     
     if posts_cache['data'] is None or (current_time - posts_cache['timestamp']) > CACHE_TTL:
-        posts_cache['data'] = sheets_service.get_posts()
-        posts_cache['timestamp'] = current_time
+        try:
+            posts_cache['data'] = sheets_service.get_posts()
+            posts_cache['timestamp'] = current_time
+        except Exception as e:
+            print(f"⚠️ Error obteniendo posts (usando caché antiguo si existe): {e}")
+            # Si hay caché antiguo, usarlo aunque esté expirado
+            if posts_cache['data'] is not None:
+                print("📦 Usando caché antiguo")
+                return posts_cache['data']
+            # Si no hay caché, propagar el error
+            raise
     
     return posts_cache['data']
 
@@ -137,6 +165,62 @@ def init_post_folders(codigo):
         print(f"❌ Error inicializando carpetas: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/cache/clear', methods=['POST'])
+def clear_cache():
+    """Limpiar caché de posts manualmente"""
+    try:
+        clear_posts_cache()
+        return jsonify({'success': True, 'message': 'Caché limpiado'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/drive/file-exists', methods=['GET'])
+def check_file_exists():
+    """Verificar si un archivo existe en Drive sin descargarlo (más confiable que proxy)"""
+    try:
+        codigo = request.args.get('codigo')
+        folder = request.args.get('folder')
+        filename = request.args.get('filename')
+        
+        if not all([codigo, folder, filename]):
+            return jsonify({'error': 'Faltan parámetros'}), 400
+        
+        # Obtener post
+        posts = get_cached_posts()
+        post = next((p for p in posts if p['codigo'] == codigo), None)
+        
+        if not post or not post.get('drive_folder_id'):
+            return jsonify({'exists': False}), 200
+        
+        # Obtener subfolder
+        folder_id = post['drive_folder_id']
+        subfolder_id = sheets_service.get_subfolder_id(folder_id, folder)
+        
+        if not subfolder_id:
+            return jsonify({'exists': False}), 200
+        
+        # Buscar archivo en Drive
+        try:
+            query = f"name='{filename}' and '{subfolder_id}' in parents and trashed=false"
+            results = sheets_service.drive_service.files().list(
+                q=query,
+                spaces='drive',
+                fields='files(id, name)'
+            ).execute()
+            
+            files = results.get('files', [])
+            exists = len(files) > 0
+            
+            return jsonify({'exists': exists, 'filename': filename})
+            
+        except Exception as e:
+            print(f"⚠️ Error buscando archivo: {e}")
+            return jsonify({'exists': False}), 200
+        
+    except Exception as e:
+        print(f"❌ Error verificando archivo: {str(e)}")
+        return jsonify({'exists': False}), 200
+
 @app.route('/api/drive/file', methods=['GET'])
 def get_drive_file():
     try:
@@ -182,6 +266,8 @@ def get_drive_image():
         folder = request.args.get('folder')
         filename = request.args.get('filename')
         
+        print(f"📸 Solicitando imagen: codigo={codigo}, folder={folder}, filename={filename}")
+        
         if not all([codigo, folder, filename]):
             return jsonify({'error': 'Faltan parámetros'}), 400
         
@@ -190,34 +276,53 @@ def get_drive_image():
         post = next((p for p in posts if p['codigo'] == codigo), None)
         
         if not post or not post.get('drive_folder_id'):
+            print(f"❌ Post no encontrado: {codigo}")
             return jsonify({'error': 'Post no encontrado'}), 404
         
         # Obtener subfolder
         folder_id = post['drive_folder_id']
+        print(f"📁 Folder ID del post: {folder_id}")
         subfolder_id = sheets_service.get_subfolder_id(folder_id, folder)
         
         if not subfolder_id:
+            print(f"❌ Carpeta {folder} no encontrada en {folder_id}")
             return jsonify({'error': f'Carpeta {folder} no encontrada'}), 404
         
+        print(f"📁 Subfolder ID ({folder}): {subfolder_id}")
+        
         # Leer imagen con reintentos para errores de SSL
-        max_retries = 3
+        max_retries = 5
         image_bytes = None
+        last_error = None
         
         for attempt in range(max_retries):
             try:
+                # Reinicializar conexión en cada intento para evitar SSL stale
+                if attempt > 0:
+                    sheets_service.ensure_authenticated()
+                    time.sleep(0.3 * (attempt + 1))  # Espera incremental
+                
                 image_bytes = sheets_service.get_image_from_drive(subfolder_id, filename)
                 if image_bytes:
+                    print(f"✅ Imagen cargada exitosamente en intento {attempt + 1}")
                     break
             except Exception as retry_error:
-                if 'SSL' in str(retry_error) or 'ssl' in str(retry_error).lower():
-                    print(f"⚠️ Error SSL en intento {attempt + 1}/{max_retries}: {retry_error}")
+                last_error = retry_error
+                error_msg = str(retry_error)
+                if 'SSL' in error_msg or 'ssl' in error_msg.lower():
+                    print(f"⚠️ Error SSL en intento {attempt + 1}/{max_retries}")
                     if attempt < max_retries - 1:
-                        time.sleep(0.5 * (attempt + 1))  # Espera incremental
                         continue
-                raise retry_error
+                else:
+                    print(f"❌ Error no-SSL: {error_msg}")
+                    if attempt < max_retries - 1:
+                        continue
+                    raise retry_error
         
         if not image_bytes:
-            return jsonify({'error': 'Imagen no encontrada'}), 404
+            error_detail = str(last_error) if last_error else 'Imagen no encontrada'
+            print(f"❌ No se pudo cargar imagen después de {max_retries} intentos: {error_detail}")
+            return jsonify({'error': f'Error cargando imagen: {error_detail}'}), 500
         
         # Servir imagen
         return send_file(
@@ -228,10 +333,23 @@ def get_drive_image():
         )
         
     except Exception as e:
-        print(f"❌ Error sirviendo imagen {filename}: {str(e)}")
+        error_msg = str(e)
+        print(f"❌ Error sirviendo imagen {filename}: {error_msg}")
+        
+        # Si es error SSL, limpiar caché y reinicializar servicios
+        if 'SSL' in error_msg or 'ssl' in error_msg.lower():
+            print("🔄 Error SSL detectado, limpiando caché y reinicializando...")
+            clear_posts_cache()
+            # Reinicializar servicios de Google
+            try:
+                sheets_service.ensure_authenticated()
+                print("✅ Servicios reinicializados")
+            except Exception as reinit_error:
+                print(f"⚠️ Error reinicializando: {reinit_error}")
+        
         import traceback
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': error_msg}), 500
 
 @app.route('/api/drive/video', methods=['GET'])
 def get_drive_video():
@@ -1196,10 +1314,7 @@ Genera SOLO el script con 4 escenas, sin explicaciones adicionales."""
 def generate_image_prompt():
     return jsonify({'success': True, 'message': 'Prompt generado'})
 
-# API: Generar imagen base
-@app.route('/api/generate-image', methods=['POST'])
-def generate_image():
-    return jsonify({'success': True, 'message': 'Imagen generada'})
+# Nota: El endpoint /api/generate-image está implementado más abajo con Fal.ai
 
 # API: Formatear imágenes
 @app.route('/api/format-images', methods=['POST'])
@@ -2165,6 +2280,480 @@ def execute_regenerate_image(tool_input):
             'success': False,
             'message': f"❌ Error regenerando imagen: {str(e)}"
         }
+
+# API: Mejorar prompt con selecciones visuales e imágenes de referencia
+@app.route('/api/improve-prompt-visual', methods=['POST'])
+def improve_prompt_visual():
+    """Mejora un prompt de imagen usando selecciones visuales e imágenes de referencia del PromptBuilder"""
+    try:
+        # Obtener datos del FormData
+        codigo = request.form.get('codigo')
+        prompt_original = request.form.get('prompt_original')
+        selections_json = request.form.get('selections', '{}')
+        selections = json.loads(selections_json)
+        
+        if not codigo or not prompt_original:
+            return jsonify({'error': 'Código y prompt original requeridos'}), 400
+        
+        print(f"🎨 Mejorando prompt visual para post {codigo}")
+        print(f"📝 Prompt original: {prompt_original[:100]}...")
+        print(f"🎯 Selecciones: {selections}")
+        
+        # Obtener post y carpetas
+        posts = sheets_service.get_posts()
+        post = next((p for p in posts if p['codigo'] == codigo), None)
+        
+        if not post or not post.get('drive_folder_id'):
+            return jsonify({'error': 'Post no encontrado o sin carpeta en Drive'}), 404
+        
+        folder_id = post['drive_folder_id']
+        textos_folder_id = sheets_service.get_subfolder_id(folder_id, 'textos', create_if_missing=True)
+        imagenes_folder_id = sheets_service.get_subfolder_id(folder_id, 'imagenes', create_if_missing=True)
+        
+        if not textos_folder_id or not imagenes_folder_id:
+            return jsonify({'error': 'No se pudieron acceder a las carpetas'}), 500
+        
+        # Procesar imágenes de referencia si existen
+        reference_info = []
+        for ref_num in [1, 2]:
+            ref_key = f'ref{ref_num}'
+            if ref_key in request.files:
+                ref_file = request.files[ref_key]
+                ref_influence = request.form.get(f'{ref_key}_influence', '0.6')
+                
+                # Guardar imagen en Drive
+                ref_filename = f"{codigo}_referencia_{ref_num}.png"
+                ref_bytes = ref_file.read()
+                file_id = sheets_service.save_image_to_drive(imagenes_folder_id, ref_filename, ref_bytes)
+                
+                influence_labels = {
+                    '0.3': 'Inspiración (mood/colores)',
+                    '0.6': 'Guía (estructura similar)',
+                    '0.9': 'Exacta (replicar elemento)'
+                }
+                
+                # Generar URL usando proxy local (más confiable que Drive directo)
+                drive_url = f"/api/drive/image?codigo={codigo}&folder=imagenes&filename={ref_filename}" if file_id else None
+                
+                reference_info.append({
+                    'filename': ref_filename,
+                    'file_id': file_id,
+                    'drive_url': drive_url,
+                    'influence': float(ref_influence),
+                    'label': influence_labels.get(ref_influence, 'Guía')
+                })
+                
+                print(f"  📸 Referencia {ref_num}: {ref_filename} (ID: {file_id}, influencia: {ref_influence})")
+        
+        # Guardar metadata de referencias
+        if reference_info:
+            from datetime import datetime
+            metadata = {
+                'references': reference_info,
+                'timestamp': datetime.now().isoformat(),
+                'codigo': codigo
+            }
+            metadata_filename = f"{codigo}_referencias_metadata.json"
+            sheets_service.save_file_to_drive(textos_folder_id, metadata_filename, json.dumps(metadata, indent=2))
+            print(f"  ✅ Metadata guardada: {metadata_filename}")
+        
+        # Filtrar selecciones no nulas
+        active_selections = {k: v for k, v in selections.items() if v is not None}
+        
+        # Construir prompt para Claude
+        selecciones_texto = ""
+        if active_selections:
+            selecciones_texto = "\n".join([f"- {k.title()}: {v}" for k, v in active_selections.items()])
+        
+        referencias_texto = ""
+        if reference_info:
+            referencias_texto = f"\n\nIMÁGENES DE REFERENCIA SUBIDAS:\n"
+            for i, ref in enumerate(reference_info, 1):
+                referencias_texto += f"- Referencia {i}: {ref['label']}\n"
+            referencias_texto += "\nNOTA: El usuario ha subido imágenes de referencia que se usarán en la generación. Menciona en el prompt que debe incorporar elementos de las referencias proporcionadas."
+        
+        claude_prompt = f"""Mejora este prompt de imagen para generación con IA, incorporando los siguientes elementos:
+
+PROMPT ACTUAL:
+{prompt_original}
+
+ELEMENTOS VISUALES A INCORPORAR:
+{selecciones_texto if selecciones_texto else "(No hay selecciones visuales)"}
+{referencias_texto}
+
+INSTRUCCIONES:
+- Integra los elementos visuales de forma natural en el prompt
+- Mantén el concepto y contenido original
+- Si hay imágenes de referencia, menciona que debe usar "reference images" o "guided by provided images"
+- Genera el prompt mejorado en inglés
+- Máximo 400 caracteres
+- Enfócate en equipamiento deportivo, paisajes y elementos abstractos (evita personas específicas)
+
+Genera SOLO el prompt mejorado, sin explicaciones."""
+
+        # Llamar a Claude
+        client = Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
+        
+        message = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=500,
+            messages=[{"role": "user", "content": claude_prompt}]
+        )
+        
+        nuevo_prompt = message.content[0].text.strip()
+        print(f"✅ Nuevo prompt generado: {nuevo_prompt}")
+        
+        # Guardar nuevo prompt
+        filename = f"{codigo}_prompt_imagen.txt"
+        sheets_service.save_file_to_drive(textos_folder_id, filename, nuevo_prompt)
+        print(f"✅ Prompt guardado en Drive: {filename}")
+        
+        # Actualizar checkbox
+        sheets_service.update_post_field(codigo, 'image_prompt', 'TRUE')
+        print(f"✅ Checkbox actualizado")
+        
+        # Limpiar caché para que index.html vea los cambios inmediatamente
+        clear_posts_cache()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Prompt mejorado y guardado correctamente',
+            'nuevo_prompt': nuevo_prompt,
+            'references_count': len(reference_info)
+        })
+        
+    except Exception as e:
+        print(f"❌ Error mejorando prompt visual: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/generate-image', methods=['POST'])
+def generate_image():
+    """Generar imagen base usando Fal.ai SeaDream 4.0 con referencias"""
+    try:
+        codigo = request.json.get('codigo')
+        
+        if not codigo:
+            return jsonify({'error': 'Código de post requerido'}), 400
+        
+        print(f"\n🎨 === GENERANDO IMAGEN BASE PARA {codigo} ===")
+        
+        # 0. Asegurar que los servicios estén autenticados
+        if not sheets_service.ensure_authenticated():
+            return jsonify({'error': 'Error de autenticación con Google'}), 500
+        
+        # 1. Obtener post y folders
+        posts = get_cached_posts()
+        post = next((p for p in posts if p['codigo'] == codigo), None)
+        
+        if not post or not post.get('drive_folder_id'):
+            return jsonify({'error': 'Post no encontrado'}), 404
+        
+        folder_id = post['drive_folder_id']
+        textos_folder_id = sheets_service.get_subfolder_id(folder_id, 'textos')
+        imagenes_folder_id = sheets_service.get_subfolder_id(folder_id, 'imagenes')
+        
+        # 2. Leer prompt de Fase 3
+        prompt_filename = f"{codigo}_prompt_imagen.txt"
+        prompt = sheets_service.get_file_from_drive(textos_folder_id, prompt_filename)
+        
+        if not prompt:
+            return jsonify({'error': 'Prompt no encontrado. Completa Fase 3 primero.'}), 404
+        
+        print(f"📝 Prompt: {prompt[:100]}...")
+        
+        # 3. Leer metadata de referencias
+        metadata_filename = f"{codigo}_referencias_metadata.json"
+        metadata_text = sheets_service.get_file_from_drive(textos_folder_id, metadata_filename)
+        
+        reference_images = []
+        if metadata_text:
+            metadata = json.loads(metadata_text)
+            referencias = metadata.get('references', [])
+            
+            print(f"📸 Referencias encontradas: {len(referencias)}")
+            
+            # 4. Descargar imágenes de referencia desde Drive y convertir a base64
+            for ref in referencias:
+                if ref.get('file_id'):
+                    try:
+                        # Leer imagen desde Drive
+                        image_bytes = sheets_service.get_image_from_drive(imagenes_folder_id, ref['filename'])
+                        
+                        if image_bytes:
+                            # Convertir a base64 data URL
+                            base64_image = base64.b64encode(image_bytes).decode('utf-8')
+                            data_url = f"data:image/png;base64,{base64_image}"
+                            
+                            reference_images.append({
+                                'image_url': data_url,
+                                'weight': ref.get('influence', 0.3)
+                            })
+                            print(f"  ✅ Referencia cargada: {ref['filename']} (peso: {ref.get('influence', 0.3)})")
+                    except Exception as e:
+                        print(f"  ⚠️ Error cargando referencia {ref['filename']}: {e}")
+        
+        # 5. Configurar Fal.ai
+        fal_key = os.getenv('FAL_KEY')
+        if not fal_key:
+            return jsonify({'error': 'FAL_KEY no configurada en .env'}), 500
+        
+        os.environ['FAL_KEY'] = fal_key
+        
+        # 6. Preparar argumentos para SeaDream 4.0
+        arguments = {
+            "prompt": prompt,
+            "image_size": "square_hd",  # 1024x1024
+            "num_inference_steps": 28,
+            "num_images": 4,  # Generar 4 variaciones
+            "enable_safety_checker": False
+        }
+        
+        # Agregar referencias si existen
+        if reference_images:
+            arguments["reference_images"] = reference_images
+            print(f"🖼️  Usando {len(reference_images)} imágenes de referencia")
+        
+        print(f"🚀 Llamando a Fal.ai SeaDream 4.0...")
+        print(f"   Parámetros: {json.dumps({k: v for k, v in arguments.items() if k != 'reference_images'}, indent=2)}")
+        
+        # 7. Llamar a Fal.ai
+        result = fal_client.subscribe(
+            "fal-ai/bytedance/seedream/v4/text-to-image",
+            arguments=arguments
+        )
+        
+        print(f"✅ Generación completada!")
+        
+        # 8. Procesar resultados
+        if not result or 'images' not in result or len(result['images']) == 0:
+            return jsonify({'error': 'No se generaron imágenes'}), 500
+        
+        generated_images = []
+        
+        for idx, image_data in enumerate(result['images'], 1):
+            image_url = image_data.get('url')
+            
+            if image_url:
+                # Descargar imagen
+                response = requests.get(image_url)
+                image_bytes = response.content
+                
+                # Guardar en Drive
+                filename = f"{codigo}_imagen_base_{idx}.png" if idx > 1 else f"{codigo}_imagen_base.png"
+                file_id = sheets_service.save_image_to_drive(imagenes_folder_id, filename, image_bytes)
+                
+                generated_images.append({
+                    'filename': filename,
+                    'file_id': file_id,
+                    'url': image_url,
+                    'index': idx
+                })
+                
+                print(f"  💾 Guardada: {filename} (ID: {file_id})")
+        
+        # 9. Actualizar checkbox en Sheet (solo si se generó al menos una)
+        if generated_images:
+            sheets_service.update_post_field(codigo, 'imagen_base', 'TRUE')
+            print(f"✅ Checkbox imagen_base actualizado")
+            
+            # Limpiar caché para reflejar cambios
+            clear_posts_cache()
+        
+        return jsonify({
+            'success': True,
+            'message': f'{len(generated_images)} imágenes generadas correctamente',
+            'images': generated_images,
+            'references_used': len(reference_images)
+        })
+        
+    except Exception as e:
+        print(f"❌ Error generando imagen: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+# ============================================
+# ENDPOINT PARA GENERAR PROMPT FINAL CON IA
+# ============================================
+@app.route('/api/generate-final-prompt', methods=['POST'])
+def generate_final_prompt():
+    """Genera el prompt final usando Claude basándose en system prompt y user prompt"""
+    try:
+        data = request.json
+        system_prompt = data.get('system_prompt', '')
+        user_prompt = data.get('user_prompt', '')
+        reference_usage = data.get('reference_usage', [])
+        
+        if not user_prompt:
+            return jsonify({'error': 'User prompt requerido'}), 400
+        
+        print(f"\n🤖 === GENERANDO PROMPT FINAL CON IA ===")
+        print(f"📋 System Prompt: {len(system_prompt)} caracteres")
+        print(f"💬 User Prompt: {user_prompt[:100]}...")
+        print(f"🖼️  Referencias: {len(reference_usage)}")
+        for ref in reference_usage:
+            print(f"  - Ref {ref['ref_num']}: {ref['usage']}")
+        
+        # Configurar Claude
+        anthropic_key = os.getenv('ANTHROPIC_API_KEY')
+        if not anthropic_key:
+            return jsonify({'error': 'ANTHROPIC_API_KEY no configurada'}), 500
+        
+        client = Anthropic(api_key=anthropic_key)
+        
+        # Construir contexto de referencias
+        ref_context = ""
+        if reference_usage:
+            ref_context = "\n\nREFERENCE USAGE INFO:\n"
+            for ref in reference_usage:
+                ref_context += f"- Reference {ref['ref_num']}: Use {ref['usage']}\n"
+        
+        # Construir mensaje para Claude
+        messages = [
+            {
+                "role": "user",
+                "content": f"{system_prompt}{ref_context}\n\nUSER REQUEST:\n{user_prompt}\n\nGenera el prompt final para SeeDream 4.0 (máx 500 caracteres) en ESPAÑOL:"
+            }
+        ]
+        
+        print(f"🚀 Llamando a Claude Haiku...")
+        
+        # Llamar a Claude Haiku (rápido y económico)
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=500,
+            messages=messages
+        )
+        
+        final_prompt = response.content[0].text.strip()
+        
+        print(f"✅ Prompt generado: {final_prompt[:100]}...")
+        print(f"📏 Longitud: {len(final_prompt)} caracteres")
+        
+        return jsonify({
+            'success': True,
+            'final_prompt': final_prompt,
+            'length': len(final_prompt)
+        })
+        
+    except Exception as e:
+        print(f"❌ Error generando prompt: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+# ============================================
+# ENDPOINT DE PRUEBA FAL.AI
+# ============================================
+@app.route('/api/test-fal', methods=['POST'])
+def test_fal_generate():
+    """Endpoint de prueba para Fal.ai SeaDream 4.0"""
+    try:
+        data = request.json
+        prompt = data.get('prompt', '')
+        reference_images_base64 = data.get('reference_images', [])
+        
+        if not prompt:
+            return jsonify({'error': 'Prompt requerido'}), 400
+        
+        print(f"\n🎨 === TEST FAL.AI GENERATION ===")
+        print(f"📝 Prompt: {prompt[:100]}...")
+        print(f"📸 Referencias: {len(reference_images_base64)}")
+        
+        # Configurar Fal.ai
+        fal_key = os.getenv('FAL_KEY')
+        if not fal_key:
+            return jsonify({'error': 'FAL_KEY no configurada en .env'}), 500
+        
+        os.environ['FAL_KEY'] = fal_key
+        
+        # Preparar argumentos
+        # Si hay referencias, usar endpoint "edit" (image-to-image)
+        # Si no hay referencias, usar endpoint "text-to-image"
+        
+        if reference_images_base64:
+            # Endpoint EDIT (soporta referencias)
+            endpoint = "fal-ai/bytedance/seedream/v4/edit"
+            
+            # Convertir referencias a formato de URLs
+            image_urls = []
+            for idx, img_data in enumerate(reference_images_base64):
+                image_urls.append(img_data)
+                print(f"  ✅ Referencia {idx + 1} agregada")
+            
+            arguments = {
+                "prompt": prompt,
+                "image_urls": image_urls,  # Array de URLs/base64
+                "num_images": 4,
+                "enable_safety_checker": False
+            }
+            
+            print(f"🖼️  Usando {len(image_urls)} imágenes de referencia (endpoint: edit)")
+        else:
+            # Endpoint TEXT-TO-IMAGE (sin referencias)
+            endpoint = "fal-ai/bytedance/seedream/v4/text-to-image"
+            
+            arguments = {
+                "prompt": prompt,
+                "image_size": "square_hd",
+                "num_inference_steps": 28,
+                "num_images": 4,
+                "enable_safety_checker": False
+            }
+            
+            print(f"🎨 Sin referencias (endpoint: text-to-image)")
+        
+        print(f"🚀 Llamando a Fal.ai SeaDream 4.0 ({endpoint})...")
+        
+        # Llamar a Fal.ai
+        result = fal_client.subscribe(endpoint, arguments=arguments)
+        
+        print(f"✅ Generación completada!")
+        
+        # Procesar resultados
+        generated_images = []
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Crear carpeta de resultados si no existe
+        results_dir = os.path.join(os.path.dirname(__file__), '..', 'falai', 'test_results')
+        os.makedirs(results_dir, exist_ok=True)
+        
+        for idx, image_data in enumerate(result['images'], 1):
+            image_url = image_data['url']
+            
+            # Descargar imagen
+            response = requests.get(image_url)
+            image_bytes = response.content
+            
+            # Guardar localmente
+            filename = f"test_{timestamp}_{idx}.png"
+            filepath = os.path.join(results_dir, filename)
+            
+            with open(filepath, 'wb') as f:
+                f.write(image_bytes)
+            
+            generated_images.append({
+                'filename': filename,
+                'url': image_url,
+                'local_path': filepath
+            })
+            
+            print(f"  💾 Guardada: {filename}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'{len(generated_images)} imágenes generadas',
+            'images': generated_images,
+            'timestamp': timestamp
+        })
+        
+    except Exception as e:
+        print(f"❌ Error en test Fal.ai: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)

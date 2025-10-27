@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fal.ai SeaDream 4.0 - Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 40px;
+            font-size: 1.1em;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            padding: 25px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            border: 2px solid #e9ecef;
+        }
+        
+        .section h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 600;
+        }
+        
+        textarea {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 15px;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 120px;
+            transition: border-color 0.3s;
+        }
+        
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .char-count {
+            text-align: right;
+            color: #999;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+        
+        .upload-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 15px;
+        }
+        
+        .upload-box {
+            border: 3px dashed #ddd;
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: white;
+            position: relative;
+        }
+        
+        .upload-box:hover:not(.has-image) {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+        
+        .upload-box.has-image {
+            border-color: #28a745;
+            border-style: solid;
+            cursor: default;
+            padding: 15px;
+        }
+        
+        .upload-box input[type="file"] {
+            display: none;
+        }
+        
+        .upload-box img {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        
+        .reference-options {
+            margin-top: 15px;
+            text-align: left;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            border: 2px solid #e9ecef;
+            pointer-events: auto;
+        }
+        
+        .reference-options h4 {
+            margin: 0 0 10px 0;
+            color: #667eea;
+            font-size: 0.9em;
+        }
+        
+        .checkbox-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.85em;
+        }
+        
+        .checkbox-item input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+        
+        .checkbox-item label {
+            margin: 0;
+            cursor: pointer;
+            font-weight: normal;
+            user-select: none;
+        }
+        
+        .upload-box.has-image {
+            cursor: default;
+        }
+        
+        .upload-icon {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+        
+        .btn-generate {
+            width: 100%;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.3em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 20px;
+        }
+        
+        .btn-generate:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-generate:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .result-item {
+            background: white;
+            border-radius: 12px;
+            padding: 15px;
+            border: 2px solid #e9ecef;
+            text-align: center;
+        }
+        
+        .result-item img {
+            width: 100%;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        
+        .result-item h3 {
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+        
+        .logs {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 400px;
+            overflow-y: auto;
+            line-height: 1.6;
+        }
+        
+        .log-entry {
+            margin-bottom: 8px;
+        }
+        
+        .log-success { color: #4ade80; }
+        .log-error { color: #f87171; }
+        .log-info { color: #60a5fa; }
+        .log-warning { color: #fbbf24; }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 Fal.ai SeaDream 4.0 Test</h1>
+        <p class="subtitle">Prueba directa de generación de imágenes con referencias</p>
+        
+        <!-- System Prompt Section (Meta-Prompt) -->
+        <div class="section">
+            <h2>🧠 System Prompt (Instrucciones para la IA)</h2>
+            <label for="systemPrompt">Instrucciones sobre cómo usar las referencias y construir el prompt:</label>
+            <textarea id="systemPrompt" placeholder="Ejemplo: Utiliza las imágenes de referencia para guiar el estilo, composición y sujeto...">Estás generando un prompt de imagen para SeeDream 4.0 en ESPAÑOL. El usuario ha proporcionado imágenes de referencia que debes mencionar de forma GENÉRICA.
+
+CRÍTICO: NO puedes ver las imágenes. NO menciones contenido específico (ej: "ciclista", "desayuno"). 
+
+Tu prompt debe ser GENÉRICO y mencionar cómo usar las referencias según los aspectos seleccionados:
+- Si seleccionó "Personaje/Sujeto": "Mantén la apariencia del sujeto principal de la referencia"
+- Si seleccionó "Estilo": "Adapta el estilo visual de la referencia"
+- Si seleccionó "Iluminación": "Usa el tipo de iluminación de la referencia"
+- Si seleccionó "Fondo": "Inspírate en el ambiente/fondo de la referencia"
+- Si seleccionó "Objetos": "Incluye elementos similares a los de la referencia"
+- Si seleccionó "Composición": "Mantén el encuadre/perspectiva de la referencia"
+
+Tu tarea:
+1. Menciona de forma GENÉRICA las referencias y qué aspectos usar
+2. Describe la transformación o escena deseada
+3. Incluye detalles técnicos (perspectiva, iluminación, composición)
+
+Estructura del prompt:
+- USO DE REFERENCIAS: Qué aspectos usar (genérico)
+- SUJETO: Objeto/persona principal
+- ACCIÓN/ESCENA: Contexto y ambiente
+- ESTILO: Estética visual
+- COMPOSICIÓN: Perspectiva y encuadre
+- ILUMINACIÓN: Tipo de luz
+- DETALLES: Elementos específicos
+
+Genera un prompt conciso (máx 500 caracteres) en ESPAÑOL que use las referencias de forma genérica.</textarea>
+            <div class="char-count"><span id="systemCharCount">0</span> caracteres</div>
+        </div>
+        
+        <!-- User Prompt Section -->
+        <div class="section">
+            <h2>📝 User Prompt (Tu Descripción)</h2>
+            <label for="userPrompt">Describe qué quieres cambiar o crear basándote en las referencias:</label>
+            <textarea id="userPrompt" placeholder="Ejemplo: Transforma la escena de desayuno en un momento de entrenamiento intenso en montaña...">Transforma esta escena de desayuno en un momento de entrenamiento intenso: la misma persona pedaleando por carreteras de montaña, sudando intensamente, maillot medio abierto. Perspectiva gran angular con paisaje montañoso dramático. Estilo fotorrealista con luz natural diurna.</textarea>
+            <div class="char-count"><span id="userCharCount">0</span> caracteres</div>
+        </div>
+        
+        <!-- Final Prompt Section (Generated by AI) -->
+        <div class="section">
+            <h2>🎨 Final Prompt (Generado por IA)</h2>
+            <label for="finalPrompt">Este prompt será generado por Claude/OpenAI y enviado a Fal.ai:</label>
+            <textarea id="finalPrompt" placeholder="La IA generará el prompt final aquí..." readonly style="background: #f0f0f0;"></textarea>
+            <div class="char-count"><span id="finalCharCount">0</span> caracteres</div>
+            <button class="btn-generate" style="margin-top: 10px; padding: 12px;" onclick="generateFinalPrompt()">
+                🤖 Generar Prompt Final con IA
+            </button>
+        </div>
+        
+        <!-- Reference Images Section -->
+        <div class="section">
+            <h2>🖼️ Imágenes de Referencia</h2>
+            <p style="color: #666; margin-bottom: 15px;">Sube hasta 2 imágenes que quieres que la IA use como referencia</p>
+            <div class="upload-grid">
+                <div class="upload-box" id="upload1" onclick="if(!this.classList.contains('has-image') && (event.target === this || event.target.closest('.upload-icon, p'))) document.getElementById('ref1').click()">
+                    <input type="file" id="ref1" accept="image/*" onchange="handleImageUpload(1, event)">
+                    <div class="upload-icon">📤</div>
+                    <p>Click para subir<br>Referencia 1</p>
+                    <img id="preview1" class="hidden">
+                    <div id="options1" class="reference-options hidden" onclick="event.stopPropagation()">
+                        <h4>¿Qué usar de esta referencia?</h4>
+                        <div class="checkbox-grid">
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="ref1_subject" value="subject" checked>
+                                <label for="ref1_subject">👤 Personaje/Sujeto</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="ref1_objects" value="objects">
+                                <label for="ref1_objects">📦 Objetos</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="ref1_background" value="background">
+                                <label for="ref1_background">🏞️ Fondo</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="ref1_style" value="style" checked>
+                                <label for="ref1_style">🎨 Estilo</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="ref1_lighting" value="lighting">
+                                <label for="ref1_lighting">💡 Iluminación</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="ref1_composition" value="composition">
+                                <label for="ref1_composition">📐 Composición</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="upload-box" id="upload2" onclick="if(!this.classList.contains('has-image') && (event.target === this || event.target.closest('.upload-icon, p'))) document.getElementById('ref2').click()">
+                    <input type="file" id="ref2" accept="image/*" onchange="handleImageUpload(2, event)">
+                    <div class="upload-icon">📤</div>
+                    <p>Click para subir<br>Referencia 2</p>
+                    <img id="preview2" class="hidden">
+                    <div id="options2" class="reference-options hidden" onclick="event.stopPropagation()">
+                        <h4>¿Qué usar de esta referencia?</h4>
+                        <div class="checkbox-grid">
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="ref2_subject" value="subject">
+                                <label for="ref2_subject">👤 Personaje/Sujeto</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="ref2_objects" value="objects" checked>
+                                <label for="ref2_objects">📦 Objetos</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="ref2_background" value="background" checked>
+                                <label for="ref2_background">🏞️ Fondo</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="ref2_style" value="style">
+                                <label for="ref2_style">🎨 Estilo</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="ref2_lighting" value="lighting" checked>
+                                <label for="ref2_lighting">💡 Iluminación</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="ref2_composition" value="composition">
+                                <label for="ref2_composition">📐 Composición</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Generate Button -->
+        <button class="btn-generate" id="btnGenerate" onclick="generateImages()">
+            🚀 Generar 4 Variaciones con Fal.ai
+        </button>
+        
+        <!-- Results Section -->
+        <div class="section hidden" id="resultsSection">
+            <h2>✨ Resultados</h2>
+            <div class="results-grid" id="resultsGrid"></div>
+        </div>
+        
+        <!-- Logs Section -->
+        <div class="section">
+            <h2>📋 Logs</h2>
+            <div class="logs" id="logs">
+                <div class="log-entry log-info">🔵 Esperando acción del usuario...</div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const referenceImages = {
+            ref1: null,
+            ref2: null
+        };
+        
+        // Character counters
+        document.getElementById('systemPrompt').addEventListener('input', (e) => {
+            document.getElementById('systemCharCount').textContent = e.target.value.length;
+        });
+        
+        document.getElementById('userPrompt').addEventListener('input', (e) => {
+            document.getElementById('userCharCount').textContent = e.target.value.length;
+        });
+        
+        document.getElementById('finalPrompt').addEventListener('input', (e) => {
+            document.getElementById('finalCharCount').textContent = e.target.value.length;
+        });
+        
+        // Initial counts
+        document.getElementById('systemCharCount').textContent = document.getElementById('systemPrompt').value.length;
+        document.getElementById('userCharCount').textContent = document.getElementById('userPrompt').value.length;
+        document.getElementById('finalCharCount').textContent = document.getElementById('finalPrompt').value.length;
+        
+        // Handle image upload
+        function handleImageUpload(refNum, event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                referenceImages[`ref${refNum}`] = e.target.result;
+                document.getElementById(`preview${refNum}`).src = e.target.result;
+                document.getElementById(`preview${refNum}`).classList.remove('hidden');
+                document.getElementById(`upload${refNum}`).classList.add('has-image');
+                document.getElementById(`options${refNum}`).classList.remove('hidden');
+                addLog(`✅ Referencia ${refNum} cargada: ${file.name}`, 'success');
+            };
+            reader.readAsDataURL(file);
+        }
+        
+        // Get reference usage options
+        function getReferenceUsage(refNum) {
+            const options = [];
+            const checkboxes = document.querySelectorAll(`#options${refNum} input[type="checkbox"]:checked`);
+            checkboxes.forEach(cb => {
+                const label = document.querySelector(`label[for="${cb.id}"]`).textContent.trim();
+                options.push(label.split(' ')[1]); // Extract text after emoji
+            });
+            return options.join(', ');
+        }
+        
+        // Build reference intro for SeaDream prompt
+        function buildReferenceIntro() {
+            let intro = '';
+            
+            if (referenceImages.ref1) {
+                const usage1 = getReferenceUsage(1);
+                intro += `Reference Image 1 (use: ${usage1}): `;
+            }
+            
+            if (referenceImages.ref2) {
+                const usage2 = getReferenceUsage(2);
+                intro += `Reference Image 2 (use: ${usage2}): `;
+            }
+            
+            return intro;
+        }
+        
+        // Add log entry
+        function addLog(message, type = 'info') {
+            const logs = document.getElementById('logs');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            const timestamp = new Date().toLocaleTimeString();
+            entry.textContent = `[${timestamp}] ${message}`;
+            logs.appendChild(entry);
+            logs.scrollTop = logs.scrollHeight;
+        }
+        
+        // Generate final prompt with AI
+        async function generateFinalPrompt() {
+            const systemPrompt = document.getElementById('systemPrompt').value.trim();
+            const userPrompt = document.getElementById('userPrompt').value.trim();
+            
+            if (!userPrompt) {
+                alert('Por favor, escribe un User Prompt primero');
+                return;
+            }
+            
+            addLog('🤖 Generando prompt final con IA...', 'info');
+            
+            // Collect reference usage info
+            const referenceUsage = [];
+            if (referenceImages.ref1) {
+                referenceUsage.push({
+                    ref_num: 1,
+                    usage: getReferenceUsage(1)
+                });
+            }
+            if (referenceImages.ref2) {
+                referenceUsage.push({
+                    ref_num: 2,
+                    usage: getReferenceUsage(2)
+                });
+            }
+            
+            try {
+                const response = await fetch('http://localhost:5001/api/generate-final-prompt', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        system_prompt: systemPrompt,
+                        user_prompt: userPrompt,
+                        reference_usage: referenceUsage
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    document.getElementById('finalPrompt').value = result.final_prompt;
+                    document.getElementById('finalCharCount').textContent = result.final_prompt.length;
+                    addLog(`✅ Prompt generado: ${result.final_prompt.substring(0, 100)}...`, 'success');
+                } else {
+                    throw new Error(result.error || 'Error desconocido');
+                }
+                
+            } catch (error) {
+                addLog(`❌ Error generando prompt: ${error.message}`, 'error');
+            }
+        }
+        
+        // Generate images
+        async function generateImages() {
+            const finalPrompt = document.getElementById('finalPrompt').value.trim();
+            
+            if (!finalPrompt) {
+                alert('Por favor, genera el prompt final con IA primero (botón "🤖 Generar Prompt Final")');
+                return;
+            }
+            
+            const btn = document.getElementById('btnGenerate');
+            btn.disabled = true;
+            btn.textContent = '⏳ Generando...';
+            
+            addLog('🚀 Iniciando generación con Fal.ai...', 'info');
+            
+            // Show spinner
+            const resultsSection = document.getElementById('resultsSection');
+            const resultsGrid = document.getElementById('resultsGrid');
+            resultsSection.classList.remove('hidden');
+            resultsGrid.innerHTML = '<div class="spinner"></div>';
+            
+            try {
+                // Build reference intro
+                const referenceIntro = buildReferenceIntro();
+                
+                // Combine reference intro + final prompt
+                const fullPrompt = referenceIntro ? `${referenceIntro}\n\n${finalPrompt}` : finalPrompt;
+                
+                // Prepare request
+                const requestData = {
+                    prompt: fullPrompt,
+                    reference_images: []
+                };
+                
+                // Add reference images if present
+                if (referenceImages.ref1) {
+                    requestData.reference_images.push(referenceImages.ref1);
+                    const usage1 = getReferenceUsage(1);
+                    addLog(`📸 Referencia 1: ${usage1}`, 'info');
+                }
+                if (referenceImages.ref2) {
+                    requestData.reference_images.push(referenceImages.ref2);
+                    const usage2 = getReferenceUsage(2);
+                    addLog(`📸 Referencia 2: ${usage2}`, 'info');
+                }
+                
+                if (referenceIntro) {
+                    addLog(`📋 Intro Referencias: ${referenceIntro}`, 'info');
+                }
+                addLog(`📝 Prompt Final: ${finalPrompt.substring(0, 80)}...`, 'info');
+                addLog('🌐 Llamando a API...', 'info');
+                
+                const response = await fetch('http://localhost:5001/api/test-fal', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    addLog(`✅ Generación completada! ${result.images.length} imágenes`, 'success');
+                    displayResults(result.images);
+                } else {
+                    throw new Error(result.error || 'Error desconocido');
+                }
+                
+            } catch (error) {
+                addLog(`❌ Error: ${error.message}`, 'error');
+                resultsGrid.innerHTML = `<p style="color: red; text-align: center; grid-column: 1/-1;">Error: ${error.message}</p>`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🚀 Generar 4 Variaciones con Fal.ai';
+            }
+        }
+        
+        // Display results
+        function displayResults(images) {
+            const resultsGrid = document.getElementById('resultsGrid');
+            resultsGrid.innerHTML = '';
+            
+            images.forEach((img, idx) => {
+                const item = document.createElement('div');
+                item.className = 'result-item';
+                item.innerHTML = `
+                    <h3>Variación ${idx + 1}</h3>
+                    <img src="${img.url}" alt="Variación ${idx + 1}">
+                    <p style="font-size: 0.9em; color: #666;">${img.filename}</p>
+                `;
+                resultsGrid.appendChild(item);
+                addLog(`🖼️ Imagen ${idx + 1} lista: ${img.filename}`, 'success');
+            });
+        }
+    </script>
+</body>
+</html>
