@@ -330,6 +330,38 @@ Genera un prompt conciso (máx 500 caracteres) en ESPAÑOL que use las referenci
             </button>
         </div>
         
+        <!-- Text Overlay Section -->
+        <div class="section">
+            <h2>📝 Texto en la Imagen (Opcional)</h2>
+            <p style="color: #666; margin-bottom: 15px;">Si quieres incluir texto exacto en la imagen generada</p>
+            
+            <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                <div>
+                    <label for="textContent">Texto a incluir:</label>
+                    <input type="text" id="textContent" placeholder='Ejemplo: IRONMAN 70.3' style="width: 100%; padding: 10px; border: 2px solid #e9ecef; border-radius: 8px; font-size: 0.95em;">
+                </div>
+                <div>
+                    <label for="textPosition">Posición:</label>
+                    <select id="textPosition" style="width: 100%; padding: 10px; border: 2px solid #e9ecef; border-radius: 8px; font-size: 0.95em;">
+                        <option value="top">Parte superior</option>
+                        <option value="center">Centro</option>
+                        <option value="bottom">Parte inferior</option>
+                        <option value="top-left">Esquina sup. izq.</option>
+                        <option value="top-right">Esquina sup. der.</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="textStyle">Estilo:</label>
+                    <select id="textStyle" style="width: 100%; padding: 10px; border: 2px solid #e9ecef; border-radius: 8px; font-size: 0.95em;">
+                        <option value="bold-white">Bold blanco con sombra</option>
+                        <option value="bold-black">Bold negro con sombra</option>
+                        <option value="elegant">Elegante serif</option>
+                        <option value="modern">Moderno sans-serif</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
         <!-- Reference Images Section -->
         <div class="section">
             <h2>🖼️ Imágenes de Referencia</h2>
@@ -497,6 +529,34 @@ Genera un prompt conciso (máx 500 caracteres) en ESPAÑOL que use las referenci
             return intro;
         }
         
+        // Build text overlay instruction
+        function buildTextInstruction() {
+            const textContent = document.getElementById('textContent').value.trim();
+            if (!textContent) return '';
+            
+            const position = document.getElementById('textPosition').value;
+            const style = document.getElementById('textStyle').value;
+            
+            // Map position to Spanish description
+            const positionMap = {
+                'top': 'en la parte superior central',
+                'center': 'en el centro',
+                'bottom': 'en la parte inferior central',
+                'top-left': 'en la esquina superior izquierda',
+                'top-right': 'en la esquina superior derecha'
+            };
+            
+            // Map style to description
+            const styleMap = {
+                'bold-white': 'fuente bold, color blanco con sombra negra para contraste',
+                'bold-black': 'fuente bold, color negro con sombra blanca para contraste',
+                'elegant': 'fuente serif elegante, color blanco',
+                'modern': 'fuente sans-serif moderna, color blanco con sombra sutil'
+            };
+            
+            return `\n\nTitle "${textContent}" ${positionMap[position]}; ${styleMap[style]}.`;
+        }
+        
         // Add log entry
         function addLog(message, type = 'info') {
             const logs = document.getElementById('logs');
@@ -588,8 +648,17 @@ Genera un prompt conciso (máx 500 caracteres) en ESPAÑOL que use las referenci
                 // Build reference intro
                 const referenceIntro = buildReferenceIntro();
                 
-                // Combine reference intro + final prompt
-                const fullPrompt = referenceIntro ? `${referenceIntro}\n\n${finalPrompt}` : finalPrompt;
+                // Build text instruction
+                const textInstruction = buildTextInstruction();
+                
+                // Combine: reference intro + final prompt + text instruction
+                let fullPrompt = finalPrompt;
+                if (referenceIntro) {
+                    fullPrompt = `${referenceIntro}\n\n${fullPrompt}`;
+                }
+                if (textInstruction) {
+                    fullPrompt = `${fullPrompt}${textInstruction}`;
+                }
                 
                 // Prepare request
                 const requestData = {
@@ -612,7 +681,12 @@ Genera un prompt conciso (máx 500 caracteres) en ESPAÑOL que use las referenci
                 if (referenceIntro) {
                     addLog(`📋 Intro Referencias: ${referenceIntro}`, 'info');
                 }
+                if (textInstruction) {
+                    const textContent = document.getElementById('textContent').value;
+                    addLog(`📝 Texto a incluir: "${textContent}"`, 'info');
+                }
                 addLog(`📝 Prompt Final: ${finalPrompt.substring(0, 80)}...`, 'info');
+                addLog(`📏 Prompt Completo: ${fullPrompt.length} caracteres`, 'info');
                 addLog('🌐 Llamando a API...', 'info');
                 
                 const response = await fetch('http://localhost:5001/api/test-fal', {
