@@ -2575,6 +2575,88 @@ def generate_image():
         return jsonify({'error': str(e)}), 500
 
 # ============================================
+# ENDPOINT PARA GENERAR INSTRUCCIONES DESDE POST
+# ============================================
+@app.route('/api/generate-instructions-from-post', methods=['POST'])
+def generate_instructions_from_post():
+    """Genera instrucciones para imagen basándose en el contenido del post"""
+    try:
+        data = request.json
+        codigo = data.get('codigo')
+        
+        if not codigo:
+            return jsonify({'error': 'Código de post requerido'}), 400
+        
+        print(f"\n📋 === GENERANDO INSTRUCCIONES DESDE POST ===")
+        print(f"📝 Código: {codigo}")
+        
+        # Obtener post
+        posts = sheets_service.get_posts()
+        post = next((p for p in posts if p['codigo'] == codigo), None)
+        
+        if not post:
+            return jsonify({'error': f'Post {codigo} no encontrado'}), 404
+        
+        if not post.get('drive_folder_id'):
+            return jsonify({'error': 'Post sin carpeta en Drive'}), 404
+        
+        # Leer base.txt
+        folder_id = post['drive_folder_id']
+        textos_folder_id = sheets_service.get_subfolder_id(folder_id, 'textos')
+        
+        if not textos_folder_id:
+            return jsonify({'error': 'Carpeta textos no encontrada'}), 404
+        
+        filename = f"{codigo}_base.txt"
+        base_text = sheets_service.get_file_from_drive(textos_folder_id, filename)
+        
+        if not base_text:
+            return jsonify({'error': f'Archivo {filename} no encontrado'}), 404
+        
+        print(f"📄 Base text: {base_text[:100]}...")
+        
+        # Generar instrucciones con Claude
+        client = Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
+        
+        prompt = f"""Basándote en este contenido de post de blog sobre triatlón, genera instrucciones concisas para crear una imagen representativa.
+
+CONTENIDO DEL POST:
+{base_text[:1000]}
+
+INSTRUCCIONES:
+- Genera instrucciones en ESPAÑOL
+- Describe la escena/objeto principal que debe aparecer
+- Menciona estilo visual (fotorrealista, ilustración, etc.)
+- Incluye detalles de composición y ambiente
+- Máximo 300 caracteres
+- Enfócate en elementos visuales concretos (equipamiento, paisajes, escenas)
+
+Genera SOLO las instrucciones, sin explicaciones."""
+
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        
+        instructions = response.content[0].text.strip()
+        
+        print(f"✅ Instrucciones generadas: {instructions}")
+        
+        return jsonify({
+            'success': True,
+            'instructions': instructions,
+            'post_title': post.get('titulo', ''),
+            'codigo': codigo
+        })
+        
+    except Exception as e:
+        print(f"❌ Error generando instrucciones: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+# ============================================
 # ENDPOINT PARA GENERAR PROMPT FINAL CON IA
 # ============================================
 @app.route('/api/generate-final-prompt', methods=['POST'])
