@@ -454,6 +454,24 @@ Genera un prompt conciso (máx 500 caracteres) en ESPAÑOL que use las referenci
             </div>
         </div>
         
+        <!-- Advanced Settings Section -->
+        <div class="section">
+            <h2>⚙️ Ajustes Avanzados (Opcional)</h2>
+            <p style="color: #666; margin-bottom: 15px;">Configura características específicas de la imagen</p>
+            
+            <div id="advancedSettingsPreview" style="padding: 15px; background: #f8f9fa; border-radius: 8px; border: 2px solid #e9ecef; min-height: 60px;">
+                <p style="margin: 0; color: #999; font-style: italic;" id="noSettingsMessage">
+                    No hay ajustes configurados
+                </p>
+                <ul id="settingsList" style="display: none; margin: 0; padding-left: 20px; list-style: disc;">
+                </ul>
+            </div>
+            
+            <button onclick="openAdvancedSettings()" style="margin-top: 10px; padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                ⚙️ Configurar Ajustes
+            </button>
+        </div>
+        
         <!-- Generate Final Prompt Button -->
         <div class="section">
             <button class="btn-generate" style="padding: 12px;" onclick="generateFinalPrompt()">
@@ -480,6 +498,63 @@ Genera un prompt conciso (máx 500 caracteres) en ESPAÑOL que use las referenci
             <div class="results-grid" id="resultsGrid"></div>
         </div>
         
+        <!-- Video Generation Section -->
+        <div class="section hidden" id="videoSection">
+            <h2>🎬 Generar Video con SeeDance 1.0</h2>
+            <p style="color: #666; margin-bottom: 20px;">Genera videos de 6 segundos a partir del prompt o de una imagen</p>
+            
+            <!-- Prompt for Video -->
+            <div style="margin-bottom: 20px;">
+                <label for="videoPrompt" style="display: block; margin-bottom: 8px; font-weight: 600;">📝 Prompt para video:</label>
+                <textarea id="videoPrompt" placeholder="El prompt final se copiará aquí automáticamente..." style="width: 100%; min-height: 100px; padding: 12px; border: 2px solid #e9ecef; border-radius: 8px; font-size: 0.95em; resize: vertical;"></textarea>
+                <div class="char-count" style="margin-top: 5px;"><span id="videoCharCount">0</span> caracteres</div>
+            </div>
+            
+            <!-- Image Selection -->
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 12px; font-weight: 600;">🖼️ Imagen base (opcional para Image-to-Video):</label>
+                <div id="videoImageSelector" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;">
+                    <!-- Images will be populated here -->
+                </div>
+                <p style="margin-top: 10px; font-size: 0.85em; color: #666;">
+                    Click en una imagen para seleccionarla (solo para Image-to-Video)
+                </p>
+            </div>
+            
+            <!-- Resolution -->
+            <div style="margin-bottom: 20px;">
+                <label for="videoResolution" style="display: block; margin-bottom: 8px; font-weight: 600;">⚙️ Resolución:</label>
+                <select id="videoResolution" style="padding: 10px; border: 2px solid #e9ecef; border-radius: 8px; font-size: 0.95em;">
+                    <option value="720p" selected>720p (Económico - $0.30)</option>
+                    <option value="1024p">1024p (Alta calidad - $0.74)</option>
+                </select>
+            </div>
+            
+            <!-- Generation Buttons -->
+            <div style="display: flex; gap: 15px; margin-bottom: 20px;">
+                <button id="btnTextToVideo" onclick="generateTextToVideo()" style="flex: 1; padding: 14px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; font-size: 1em;">
+                    📝 Text-to-Video
+                </button>
+                <button id="btnImageToVideo" onclick="generateImageToVideo()" disabled style="flex: 1; padding: 14px; background: #e9ecef; color: #999; border: none; border-radius: 10px; font-weight: 600; cursor: not-allowed; font-size: 1em;">
+                    🖼️ Image-to-Video (Selecciona imagen)
+                </button>
+            </div>
+            
+            <!-- Video Result -->
+            <div id="videoResult" style="display: none; margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 12px; border: 2px solid #e9ecef;">
+                <h3 style="margin-bottom: 15px; color: #667eea;">🎥 Video Generado</h3>
+                <video id="generatedVideo" controls style="width: 100%; max-width: 720px; border-radius: 8px; display: block; margin: 0 auto;">
+                    <source id="videoSource" type="video/mp4">
+                    Tu navegador no soporta el elemento de video.
+                </video>
+                <div style="margin-top: 15px; text-align: center;">
+                    <a id="downloadVideoLink" download="video.mp4" style="display: inline-block; padding: 10px 20px; background: #28a745; color: white; text-decoration: none; border-radius: 8px; font-weight: 600;">
+                        💾 Descargar Video
+                    </a>
+                </div>
+            </div>
+        </div>
+        
         <!-- Logs Section -->
         <div class="section">
             <h2>📋 Logs</h2>
@@ -497,6 +572,60 @@ Genera un prompt conciso (máx 500 caracteres) en ESPAÑOL que use las referenci
         
         // Track original user prompt
         let savedUserPrompt = document.getElementById('userPrompt').value;
+        
+        // Advanced settings storage
+        let advancedSettings = {};
+        
+        // Video generation state
+        let selectedImageForVideo = null;
+        let generatedImages = [];
+        
+        // Load settings from localStorage on page load
+        function loadAdvancedSettings() {
+            const saved = localStorage.getItem('falai_advanced_settings');
+            if (saved) {
+                advancedSettings = JSON.parse(saved);
+                updateSettingsPreview();
+            }
+        }
+        
+        // Update preview of advanced settings
+        function updateSettingsPreview() {
+            const noMsg = document.getElementById('noSettingsMessage');
+            const list = document.getElementById('settingsList');
+            
+            const settings = [];
+            
+            if (advancedSettings.perspective) settings.push(`📐 Perspectiva: ${advancedSettings.perspective}`);
+            if (advancedSettings.composition) settings.push(`🖼️ Composición: ${advancedSettings.composition}`);
+            if (advancedSettings.lighting) settings.push(`💡 Iluminación: ${advancedSettings.lighting}`);
+            if (advancedSettings.style) settings.push(`🎨 Estilo: ${advancedSettings.style}`);
+            if (advancedSettings.realism) settings.push(`📸 Realismo: ${advancedSettings.realism}`);
+            
+            if (settings.length > 0) {
+                noMsg.style.display = 'none';
+                list.style.display = 'block';
+                list.innerHTML = settings.map(s => `<li>${s}</li>`).join('');
+            } else {
+                noMsg.style.display = 'block';
+                list.style.display = 'none';
+            }
+        }
+        
+        // Open advanced settings page
+        function openAdvancedSettings() {
+            window.open('advanced_settings.html', 'AdvancedSettings', 'width=800,height=600');
+        }
+        
+        // Listen for settings updates from popup
+        window.addEventListener('message', (event) => {
+            if (event.data.type === 'advancedSettings') {
+                advancedSettings = event.data.settings;
+                localStorage.setItem('falai_advanced_settings', JSON.stringify(advancedSettings));
+                updateSettingsPreview();
+                addLog('⚙️ Ajustes avanzados actualizados', 'success');
+            }
+        });
         
         // Character counters
         document.getElementById('systemPrompt').addEventListener('input', (e) => {
@@ -528,8 +657,9 @@ Genera un prompt conciso (máx 500 caracteres) en ESPAÑOL que use las referenci
         document.getElementById('userCharCount').textContent = document.getElementById('userPrompt').value.length;
         document.getElementById('finalCharCount').textContent = document.getElementById('finalPrompt').value.length;
         
-        // Load posts on page load
+        // Load posts and settings on page load
         loadPosts();
+        loadAdvancedSettings();
         
         // Enable/disable generate button based on selection
         document.getElementById('postSelector').addEventListener('change', (e) => {
@@ -729,6 +859,11 @@ Genera un prompt conciso (máx 500 caracteres) en ESPAÑOL que use las referenci
                 });
             }
             
+            // Log advanced settings if present
+            if (Object.keys(advancedSettings).length > 0) {
+                addLog(`⚙️ Aplicando ajustes avanzados: ${Object.keys(advancedSettings).length} configuraciones`, 'info');
+            }
+            
             try {
                 const response = await fetch('http://localhost:5001/api/generate-final-prompt', {
                     method: 'POST',
@@ -738,7 +873,8 @@ Genera un prompt conciso (máx 500 caracteres) en ESPAÑOL que use las referenci
                     body: JSON.stringify({
                         system_prompt: systemPrompt,
                         user_prompt: userPrompt,
-                        reference_usage: referenceUsage
+                        reference_usage: referenceUsage,
+                        advanced_settings: advancedSettings
                     })
                 });
                 
@@ -854,6 +990,9 @@ Genera un prompt conciso (máx 500 caracteres) en ESPAÑOL que use las referenci
             const resultsGrid = document.getElementById('resultsGrid');
             resultsGrid.innerHTML = '';
             
+            // Store images for video generation
+            generatedImages = images;
+            
             images.forEach((img, idx) => {
                 const item = document.createElement('div');
                 item.className = 'result-item';
@@ -865,7 +1004,181 @@ Genera un prompt conciso (máx 500 caracteres) en ESPAÑOL que use las referenci
                 resultsGrid.appendChild(item);
                 addLog(`🖼️ Imagen ${idx + 1} lista: ${img.filename}`, 'success');
             });
+            
+            // Populate video image selector
+            populateVideoImageSelector(images);
+            
+            // Show video section and copy final prompt
+            document.getElementById('videoSection').classList.remove('hidden');
+            const finalPrompt = document.getElementById('finalPrompt').value;
+            document.getElementById('videoPrompt').value = finalPrompt;
+            document.getElementById('videoCharCount').textContent = finalPrompt.length;
+            
+            addLog('🎬 Sección de video disponible', 'success');
         }
+        
+        // Populate video image selector
+        function populateVideoImageSelector(images) {
+            const selector = document.getElementById('videoImageSelector');
+            selector.innerHTML = '';
+            
+            images.forEach((img, idx) => {
+                const imgDiv = document.createElement('div');
+                imgDiv.style.cssText = 'position: relative; cursor: pointer; border: 3px solid transparent; border-radius: 8px; overflow: hidden; transition: all 0.3s;';
+                imgDiv.innerHTML = `
+                    <img src="${img.url}" alt="Imagen ${idx + 1}" style="width: 100%; display: block; border-radius: 6px;">
+                    <div style="position: absolute; top: 5px; right: 5px; background: rgba(0,0,0,0.7); color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; font-weight: 600;">
+                        ${idx + 1}
+                    </div>
+                `;
+                
+                imgDiv.onclick = () => selectImageForVideo(idx, imgDiv, img);
+                selector.appendChild(imgDiv);
+            });
+        }
+        
+        // Select image for video
+        function selectImageForVideo(idx, element, img) {
+            // Remove selection from all images
+            const allImages = document.querySelectorAll('#videoImageSelector > div');
+            allImages.forEach(div => {
+                div.style.border = '3px solid transparent';
+            });
+            
+            // Select this image
+            element.style.border = '3px solid #667eea';
+            selectedImageForVideo = img;
+            
+            // Enable Image-to-Video button
+            const btn = document.getElementById('btnImageToVideo');
+            btn.disabled = false;
+            btn.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
+            btn.style.color = 'white';
+            btn.style.cursor = 'pointer';
+            btn.textContent = '🖼️ Image-to-Video';
+            
+            addLog(`✅ Imagen ${idx + 1} seleccionada para video`, 'success');
+        }
+        
+        // Generate Text-to-Video
+        async function generateTextToVideo() {
+            const prompt = document.getElementById('videoPrompt').value.trim();
+            const resolution = document.getElementById('videoResolution').value;
+            
+            if (!prompt) {
+                alert('Por favor, escribe un prompt para el video');
+                return;
+            }
+            
+            const btn = document.getElementById('btnTextToVideo');
+            btn.disabled = true;
+            btn.textContent = '⏳ Generando video...';
+            
+            addLog('📝 Generando Text-to-Video con SeeDance 1.0...', 'info');
+            
+            try {
+                const response = await fetch('http://localhost:5001/api/generate-video-text', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        prompt: prompt,
+                        resolution: resolution
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    displayVideo(result.video_url);
+                    addLog(`✅ Video generado: ${result.video_url}`, 'success');
+                } else {
+                    throw new Error(result.error || 'Error desconocido');
+                }
+                
+            } catch (error) {
+                addLog(`❌ Error: ${error.message}`, 'error');
+                alert(`Error generando video: ${error.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '📝 Text-to-Video';
+            }
+        }
+        
+        // Generate Image-to-Video
+        async function generateImageToVideo() {
+            if (!selectedImageForVideo) {
+                alert('Por favor, selecciona una imagen primero');
+                return;
+            }
+            
+            const prompt = document.getElementById('videoPrompt').value.trim();
+            const resolution = document.getElementById('videoResolution').value;
+            
+            if (!prompt) {
+                alert('Por favor, escribe un prompt para el video');
+                return;
+            }
+            
+            const btn = document.getElementById('btnImageToVideo');
+            btn.disabled = true;
+            btn.textContent = '⏳ Generando video...';
+            
+            addLog('🖼️ Generando Image-to-Video con SeeDance 1.0...', 'info');
+            
+            try {
+                const response = await fetch('http://localhost:5001/api/generate-video-image', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        prompt: prompt,
+                        image_url: selectedImageForVideo.url,
+                        resolution: resolution
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    displayVideo(result.video_url);
+                    addLog(`✅ Video generado: ${result.video_url}`, 'success');
+                } else {
+                    throw new Error(result.error || 'Error desconocido');
+                }
+                
+            } catch (error) {
+                addLog(`❌ Error: ${error.message}`, 'error');
+                alert(`Error generando video: ${error.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🖼️ Image-to-Video';
+            }
+        }
+        
+        // Display video
+        function displayVideo(videoUrl) {
+            const videoResult = document.getElementById('videoResult');
+            const videoSource = document.getElementById('videoSource');
+            const video = document.getElementById('generatedVideo');
+            const downloadLink = document.getElementById('downloadVideoLink');
+            
+            videoSource.src = videoUrl;
+            video.load();
+            downloadLink.href = videoUrl;
+            
+            videoResult.style.display = 'block';
+            
+            // Scroll to video
+            videoResult.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        
+        // Character counter for video prompt
+        document.getElementById('videoPrompt').addEventListener('input', (e) => {
+            document.getElementById('videoCharCount').textContent = e.target.value.length;
+        });
     </script>
 </body>
 </html>

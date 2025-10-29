@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ajustes Avanzados - SeaDream 4.0</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 700px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 1.8em;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 0.95em;
+        }
+        
+        .setting-group {
+            margin-bottom: 25px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            border: 2px solid #e9ecef;
+        }
+        
+        .setting-group h3 {
+            color: #667eea;
+            margin-bottom: 12px;
+            font-size: 1.1em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .setting-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+            font-size: 0.9em;
+        }
+        
+        .setting-group select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 0.95em;
+            background: white;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        
+        .setting-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+        }
+        
+        .btn {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-apply {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-apply:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn-cancel {
+            background: #e9ecef;
+            color: #666;
+        }
+        
+        .btn-cancel:hover {
+            background: #dee2e6;
+        }
+        
+        .btn-clear {
+            background: #fff3cd;
+            color: #856404;
+            border: 2px solid #ffc107;
+        }
+        
+        .btn-clear:hover {
+            background: #ffc107;
+            color: white;
+        }
+        
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            font-size: 0.9em;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚙️ Ajustes Avanzados</h1>
+        <p class="subtitle">Configura características específicas para la generación de imágenes</p>
+        
+        <div class="info-box">
+            💡 <strong>Tip:</strong> Estos ajustes se aplicarán al generar el prompt final con IA. Deja en blanco los que no necesites.
+        </div>
+        
+        <!-- Perspectiva -->
+        <div class="setting-group">
+            <h3>📐 Perspectiva</h3>
+            <label for="perspective">Tipo de encuadre:</label>
+            <select id="perspective">
+                <option value="">-- No especificar --</option>
+                <option value="Close-up">Close-up (Primer plano)</option>
+                <option value="Medium shot">Medium shot (Plano medio)</option>
+                <option value="Wide angle">Wide angle (Gran angular)</option>
+                <option value="Bird's eye view">Bird's eye view (Vista aérea)</option>
+                <option value="Low angle">Low angle (Contrapicado)</option>
+                <option value="Eye level">Eye level (Nivel de ojos)</option>
+            </select>
+        </div>
+        
+        <!-- Composición -->
+        <div class="setting-group">
+            <h3>🖼️ Composición</h3>
+            <label for="composition">Distribución de elementos:</label>
+            <select id="composition">
+                <option value="">-- No especificar --</option>
+                <option value="Centered">Centered (Centrado)</option>
+                <option value="Rule of thirds">Rule of thirds (Regla de tercios)</option>
+                <option value="Symmetrical">Symmetrical (Simétrico)</option>
+                <option value="Dynamic diagonal">Dynamic diagonal (Diagonal dinámico)</option>
+                <option value="Minimalist">Minimalist (Minimalista)</option>
+                <option value="Busy frame">Busy frame (Encuadre lleno)</option>
+            </select>
+        </div>
+        
+        <!-- Iluminación -->
+        <div class="setting-group">
+            <h3>💡 Iluminación</h3>
+            <label for="lighting">Tipo de luz:</label>
+            <select id="lighting">
+                <option value="">-- No especificar --</option>
+                <option value="Natural daylight">Natural daylight (Luz natural diurna)</option>
+                <option value="Golden hour">Golden hour (Hora dorada)</option>
+                <option value="Blue hour">Blue hour (Hora azul)</option>
+                <option value="Overcast">Overcast (Nublado)</option>
+                <option value="Studio lighting">Studio lighting (Iluminación de estudio)</option>
+                <option value="Dramatic shadows">Dramatic shadows (Sombras dramáticas)</option>
+                <option value="Soft diffused">Soft diffused (Suave difusa)</option>
+                <option value="Backlit">Backlit (Contraluz)</option>
+            </select>
+        </div>
+        
+        <!-- Estilo -->
+        <div class="setting-group">
+            <h3>🎨 Estilo Visual</h3>
+            <label for="style">Estética general:</label>
+            <select id="style">
+                <option value="">-- No especificar --</option>
+                <option value="Photorealistic">Photorealistic (Fotorrealista)</option>
+                <option value="Cinematic">Cinematic (Cinematográfico)</option>
+                <option value="Editorial">Editorial (Editorial)</option>
+                <option value="Documentary">Documentary (Documental)</option>
+                <option value="Artistic">Artistic (Artístico)</option>
+                <option value="Minimalist">Minimalist (Minimalista)</option>
+                <option value="Vibrant">Vibrant (Vibrante)</option>
+                <option value="Moody">Moody (Atmosférico)</option>
+            </select>
+        </div>
+        
+        <!-- Realismo -->
+        <div class="setting-group">
+            <h3>📸 Nivel de Realismo</h3>
+            <label for="realism">Grado de detalle:</label>
+            <select id="realism">
+                <option value="">-- No especificar --</option>
+                <option value="Hyper-realistic">Hyper-realistic (Hiper-realista)</option>
+                <option value="Realistic">Realistic (Realista)</option>
+                <option value="Semi-realistic">Semi-realistic (Semi-realista)</option>
+                <option value="Stylized">Stylized (Estilizado)</option>
+                <option value="Abstract">Abstract (Abstracto)</option>
+            </select>
+        </div>
+        
+        <!-- Botones -->
+        <div class="button-group">
+            <button class="btn btn-clear" onclick="clearSettings()">
+                🗑️ Limpiar Todo
+            </button>
+            <button class="btn btn-cancel" onclick="window.close()">
+                ❌ Cancelar
+            </button>
+            <button class="btn btn-apply" onclick="applySettings()">
+                ✅ Aplicar Ajustes
+            </button>
+        </div>
+    </div>
+    
+    <script>
+        // Load saved settings on page load
+        window.addEventListener('load', () => {
+            const saved = localStorage.getItem('falai_advanced_settings');
+            if (saved) {
+                const settings = JSON.parse(saved);
+                
+                if (settings.perspective) document.getElementById('perspective').value = settings.perspective;
+                if (settings.composition) document.getElementById('composition').value = settings.composition;
+                if (settings.lighting) document.getElementById('lighting').value = settings.lighting;
+                if (settings.style) document.getElementById('style').value = settings.style;
+                if (settings.realism) document.getElementById('realism').value = settings.realism;
+            }
+        });
+        
+        // Apply settings
+        function applySettings() {
+            const settings = {
+                perspective: document.getElementById('perspective').value,
+                composition: document.getElementById('composition').value,
+                lighting: document.getElementById('lighting').value,
+                style: document.getElementById('style').value,
+                realism: document.getElementById('realism').value
+            };
+            
+            // Remove empty values
+            Object.keys(settings).forEach(key => {
+                if (!settings[key]) delete settings[key];
+            });
+            
+            // Send to parent window
+            if (window.opener) {
+                window.opener.postMessage({
+                    type: 'advancedSettings',
+                    settings: settings
+                }, '*');
+            }
+            
+            // Close window
+            window.close();
+        }
+        
+        // Clear all settings
+        function clearSettings() {
+            if (confirm('¿Estás seguro de que quieres limpiar todos los ajustes?')) {
+                document.getElementById('perspective').value = '';
+                document.getElementById('composition').value = '';
+                document.getElementById('lighting').value = '';
+                document.getElementById('style').value = '';
+                document.getElementById('realism').value = '';
+                
+                // Send empty settings to parent
+                if (window.opener) {
+                    window.opener.postMessage({
+                        type: 'advancedSettings',
+                        settings: {}
+                    }, '*');
+                }
+                
+                window.close();
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1504,10 +1504,123 @@ def format_images():
 def generate_video_script():
     return jsonify({'success': True, 'message': 'Script generado'})
 
-# API: Generar video base
+# API: Generar video base (legacy - mantener para compatibilidad)
 @app.route('/api/generate-video', methods=['POST'])
 def generate_video():
     return jsonify({'success': True, 'message': 'Video generado'})
+
+# ============================================
+# ENDPOINTS PARA GENERACIÓN DE VIDEO CON SEEDANCE 1.0
+# ============================================
+
+@app.route('/api/generate-video-text', methods=['POST'])
+def generate_video_text():
+    """Genera video desde texto usando SeeDance 1.0 Pro Text-to-Video"""
+    try:
+        data = request.json
+        prompt = data.get('prompt')
+        resolution = data.get('resolution', '720p')
+        
+        if not prompt:
+            return jsonify({'error': 'Prompt requerido'}), 400
+        
+        print(f"\n🎬 === GENERANDO TEXT-TO-VIDEO ===")
+        print(f"📝 Prompt: {prompt[:100]}...")
+        print(f"📐 Resolución: {resolution}")
+        
+        # Configurar dimensiones según resolución
+        if resolution == '1024p':
+            width, height = 1024, 1024
+        else:  # 720p por defecto
+            width, height = 1280, 720
+        
+        # Llamar a Fal.ai SeeDance Text-to-Video
+        import fal_client
+        
+        result = fal_client.subscribe(
+            "fal-ai/bytedance/seedance/v1/pro/text-to-video",
+            arguments={
+                "prompt": prompt,
+                "video_size": {
+                    "width": width,
+                    "height": height
+                }
+            },
+            with_logs=True,
+            on_queue_update=lambda update: print(f"  ⏳ Status: {getattr(update, 'status', 'processing')}")
+        )
+        
+        print(f"✅ Video generado!")
+        print(f"🎥 URL: {result['video']['url']}")
+        
+        return jsonify({
+            'success': True,
+            'video_url': result['video']['url'],
+            'duration': result.get('timings', {}).get('inference', 0),
+            'resolution': f"{width}x{height}"
+        })
+        
+    except Exception as e:
+        print(f"❌ Error generando text-to-video: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/generate-video-image', methods=['POST'])
+def generate_video_image():
+    """Genera video desde imagen usando SeeDance 1.0 Pro Image-to-Video"""
+    try:
+        data = request.json
+        prompt = data.get('prompt')
+        image_url = data.get('image_url')
+        resolution = data.get('resolution', '720p')
+        
+        if not prompt or not image_url:
+            return jsonify({'error': 'Prompt e image_url requeridos'}), 400
+        
+        print(f"\n🎬 === GENERANDO IMAGE-TO-VIDEO ===")
+        print(f"📝 Prompt: {prompt[:100]}...")
+        print(f"🖼️  Imagen: {image_url[:80]}...")
+        print(f"📐 Resolución: {resolution}")
+        
+        # Configurar dimensiones según resolución
+        if resolution == '1024p':
+            width, height = 1024, 1024
+        else:  # 720p por defecto
+            width, height = 1280, 720
+        
+        # Llamar a Fal.ai SeeDance Image-to-Video
+        import fal_client
+        
+        result = fal_client.subscribe(
+            "fal-ai/bytedance/seedance/v1/pro/image-to-video",
+            arguments={
+                "prompt": prompt,
+                "image_url": image_url,
+                "video_size": {
+                    "width": width,
+                    "height": height
+                }
+            },
+            with_logs=True,
+            on_queue_update=lambda update: print(f"  ⏳ Status: {getattr(update, 'status', 'processing')}")
+        )
+        
+        print(f"✅ Video generado!")
+        print(f"🎥 URL: {result['video']['url']}")
+        
+        return jsonify({
+            'success': True,
+            'video_url': result['video']['url'],
+            'duration': result.get('timings', {}).get('inference', 0),
+            'resolution': f"{width}x{height}"
+        })
+        
+    except Exception as e:
+        print(f"❌ Error generando image-to-video: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 # API: Formatear videos
 @app.route('/api/format-videos', methods=['POST'])
@@ -2667,6 +2780,7 @@ def generate_final_prompt():
         system_prompt = data.get('system_prompt', '')
         user_prompt = data.get('user_prompt', '')
         reference_usage = data.get('reference_usage', [])
+        advanced_settings = data.get('advanced_settings', {})
         
         if not user_prompt:
             return jsonify({'error': 'User prompt requerido'}), 400
@@ -2677,6 +2791,8 @@ def generate_final_prompt():
         print(f"🖼️  Referencias: {len(reference_usage)}")
         for ref in reference_usage:
             print(f"  - Ref {ref['ref_num']}: {ref['usage']}")
+        if advanced_settings:
+            print(f"⚙️  Ajustes avanzados: {list(advanced_settings.keys())}")
         
         # Configurar Claude
         anthropic_key = os.getenv('ANTHROPIC_API_KEY')
@@ -2692,11 +2808,26 @@ def generate_final_prompt():
             for ref in reference_usage:
                 ref_context += f"- Reference {ref['ref_num']}: Use {ref['usage']}\n"
         
+        # Construir contexto de ajustes avanzados
+        settings_context = ""
+        if advanced_settings:
+            settings_context = "\n\nADVANCED SETTINGS TO INCORPORATE:\n"
+            if advanced_settings.get('perspective'):
+                settings_context += f"- Perspectiva: {advanced_settings['perspective']}\n"
+            if advanced_settings.get('composition'):
+                settings_context += f"- Composición: {advanced_settings['composition']}\n"
+            if advanced_settings.get('lighting'):
+                settings_context += f"- Iluminación: {advanced_settings['lighting']}\n"
+            if advanced_settings.get('style'):
+                settings_context += f"- Estilo: {advanced_settings['style']}\n"
+            if advanced_settings.get('realism'):
+                settings_context += f"- Realismo: {advanced_settings['realism']}\n"
+        
         # Construir mensaje para Claude
         messages = [
             {
                 "role": "user",
-                "content": f"{system_prompt}{ref_context}\n\nUSER REQUEST:\n{user_prompt}\n\nGenera el prompt final para SeeDream 4.0 (máx 500 caracteres) en ESPAÑOL:"
+                "content": f"{system_prompt}{ref_context}{settings_context}\n\nUSER REQUEST:\n{user_prompt}\n\nGenera el prompt final para SeeDream 4.0 (máx 500 caracteres) en ESPAÑOL, incorporando los ajustes avanzados de forma natural:"
             }
         ]
         
