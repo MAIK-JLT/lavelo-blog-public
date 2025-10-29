@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "lavelo-blog": {
+      "command": "python",
+      "args": [
+        "/Users/julioizquierdo/lavelo-blog/mcp_server.py"
+      ],
+      "env": {}
+    }
+  }
+}

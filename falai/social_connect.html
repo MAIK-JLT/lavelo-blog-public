@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conectar Redes Sociales</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 550px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 1.8em;
+            text-align: center;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 0.95em;
+            text-align: center;
+        }
+        
+        .social-button {
+            width: 100%;
+            padding: 18px;
+            margin-bottom: 15px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+        
+        .social-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        }
+        
+        .social-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .instagram {
+            background: linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+        }
+        
+        .linkedin {
+            background: linear-gradient(135deg, #0077b5 0%, #00a0dc 100%);
+        }
+        
+        .twitter {
+            background: linear-gradient(135deg, #1da1f2 0%, #0d8bd9 100%);
+        }
+        
+        .status {
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            font-size: 0.95em;
+        }
+        
+        .connected {
+            color: #28a745;
+            font-weight: 600;
+        }
+        
+        .disconnected {
+            color: #dc3545;
+            font-weight: 600;
+        }
+        
+        .info-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            font-size: 0.9em;
+            color: #856404;
+        }
+        
+        .close-btn {
+            width: 100%;
+            padding: 12px;
+            background: #e9ecef;
+            color: #666;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        
+        .close-btn:hover {
+            background: #dee2e6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📱 Conectar Redes Sociales</h1>
+        <p class="subtitle">Autoriza el acceso a tus redes para publicar automáticamente</p>
+        
+        <div class="info-box">
+            ℹ️ <strong>Importante:</strong> Solo solicitamos permisos de publicación. Nunca accedemos a tus mensajes privados.
+        </div>
+        
+        <div class="status">
+            <div class="status-item">
+                <span>📷 Instagram</span>
+                <span id="instagramStatus" class="disconnected">❌ No conectado</span>
+            </div>
+            <div class="status-item">
+                <span>💼 LinkedIn</span>
+                <span id="linkedinStatus" class="disconnected">❌ No conectado</span>
+            </div>
+            <div class="status-item">
+                <span>🐦 Twitter/X</span>
+                <span id="twitterStatus" class="disconnected">❌ No conectado</span>
+            </div>
+        </div>
+        
+        <button class="social-button instagram" onclick="connectInstagram()">
+            <span style="font-size: 1.5em;">📷</span>
+            <span>Conectar Instagram</span>
+        </button>
+        
+        <button class="social-button linkedin" onclick="connectLinkedIn()">
+            <span style="font-size: 1.5em;">💼</span>
+            <span>Conectar LinkedIn</span>
+        </button>
+        
+        <button class="social-button twitter" onclick="connectTwitter()">
+            <span style="font-size: 1.5em;">🐦</span>
+            <span>Conectar Twitter/X</span>
+        </button>
+        
+        <button class="close-btn" onclick="window.close()">
+            Cerrar
+        </button>
+    </div>
+    
+    <script>
+        // Check current connections on load
+        window.addEventListener('load', async () => {
+            try {
+                const response = await fetch('http://localhost:5001/api/social/status');
+                const result = await response.json();
+                
+                if (result.success) {
+                    updateStatus('instagram', result.connections.instagram);
+                    updateStatus('linkedin', result.connections.linkedin);
+                    updateStatus('twitter', result.connections.twitter);
+                }
+            } catch (error) {
+                console.error('Error checking status:', error);
+            }
+        });
+        
+        // Update status display
+        function updateStatus(platform, connected) {
+            const statusEl = document.getElementById(`${platform}Status`);
+            if (connected) {
+                statusEl.textContent = '✅ Conectado';
+                statusEl.className = 'connected';
+            } else {
+                statusEl.textContent = '❌ No conectado';
+                statusEl.className = 'disconnected';
+            }
+        }
+        
+        // Connect Instagram
+        async function connectInstagram() {
+            try {
+                const response = await fetch('http://localhost:5001/api/social/oauth/instagram');
+                const result = await response.json();
+                
+                if (result.success && result.auth_url) {
+                    // Open OAuth window
+                    const width = 600;
+                    const height = 700;
+                    const left = (screen.width - width) / 2;
+                    const top = (screen.height - height) / 2;
+                    
+                    const authWindow = window.open(
+                        result.auth_url,
+                        'InstagramAuth',
+                        `width=${width},height=${height},left=${left},top=${top}`
+                    );
+                    
+                    // Poll for completion
+                    const pollTimer = setInterval(async () => {
+                        if (authWindow.closed) {
+                            clearInterval(pollTimer);
+                            // Check if connected
+                            const statusResponse = await fetch('http://localhost:5001/api/social/status');
+                            const statusResult = await statusResponse.json();
+                            if (statusResult.success && statusResult.connections.instagram) {
+                                updateStatus('instagram', true);
+                                notifyParent('instagram');
+                            }
+                        }
+                    }, 500);
+                }
+            } catch (error) {
+                alert('Error conectando Instagram: ' + error.message);
+            }
+        }
+        
+        // Connect LinkedIn
+        async function connectLinkedIn() {
+            try {
+                const response = await fetch('http://localhost:5001/api/social/oauth/linkedin');
+                const result = await response.json();
+                
+                if (result.success && result.auth_url) {
+                    const width = 600;
+                    const height = 700;
+                    const left = (screen.width - width) / 2;
+                    const top = (screen.height - height) / 2;
+                    
+                    const authWindow = window.open(
+                        result.auth_url,
+                        'LinkedInAuth',
+                        `width=${width},height=${height},left=${left},top=${top}`
+                    );
+                    
+                    const pollTimer = setInterval(async () => {
+                        if (authWindow.closed) {
+                            clearInterval(pollTimer);
+                            const statusResponse = await fetch('http://localhost:5001/api/social/status');
+                            const statusResult = await statusResponse.json();
+                            if (statusResult.success && statusResult.connections.linkedin) {
+                                updateStatus('linkedin', true);
+                                notifyParent('linkedin');
+                            }
+                        }
+                    }, 500);
+                }
+            } catch (error) {
+                alert('Error conectando LinkedIn: ' + error.message);
+            }
+        }
+        
+        // Connect Twitter
+        async function connectTwitter() {
+            try {
+                const response = await fetch('http://localhost:5001/api/social/oauth/twitter');
+                const result = await response.json();
+                
+                if (result.success && result.auth_url) {
+                    const width = 600;
+                    const height = 700;
+                    const left = (screen.width - width) / 2;
+                    const top = (screen.height - height) / 2;
+                    
+                    const authWindow = window.open(
+                        result.auth_url,
+                        'TwitterAuth',
+                        `width=${width},height=${height},left=${left},top=${top}`
+                    );
+                    
+                    const pollTimer = setInterval(async () => {
+                        if (authWindow.closed) {
+                            clearInterval(pollTimer);
+                            const statusResponse = await fetch('http://localhost:5001/api/social/status');
+                            const statusResult = await statusResponse.json();
+                            if (statusResult.success && statusResult.connections.twitter) {
+                                updateStatus('twitter', true);
+                                notifyParent('twitter');
+                            }
+                        }
+                    }, 500);
+                }
+            } catch (error) {
+                alert('Error conectando Twitter: ' + error.message);
+            }
+        }
+        
+        // Notify parent window
+        function notifyParent(platform) {
+            if (window.opener) {
+                window.opener.postMessage({
+                    type: 'socialConnected',
+                    platform: platform
+                }, '*');
+            }
+        }
+    </script>
+</body>
+</html>

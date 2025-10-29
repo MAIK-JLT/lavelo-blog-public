@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 from flask import Flask, request, jsonify, session, redirect, url_for
 from flask_cors import CORS
+from flasgger import Swagger, swag_from
 from dotenv import load_dotenv
 
 # Cargar variables de entorno ANTES de importar sheets_service
@@ -38,6 +39,47 @@ cloudinary.config(
 
 app = Flask(__name__, static_folder='../panel', static_url_path='')
 app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+
+# Configurar Swagger
+swagger_config = {
+    "headers": [],
+    "specs": [
+        {
+            "endpoint": 'apispec',
+            "route": '/apispec.json',
+            "rule_filter": lambda rule: True,
+            "model_filter": lambda tag: True,
+        }
+    ],
+    "static_url_path": "/flasgger_static",
+    "swagger_ui": True,
+    "specs_route": "/api/docs"
+}
+
+swagger_template = {
+    "swagger": "2.0",
+    "info": {
+        "title": "Lavelo Blog API",
+        "description": "API para gestión automatizada de contenido del blog de triatlón",
+        "version": "1.0.0",
+        "contact": {
+            "name": "Lavelo Blog",
+            "url": "https://blog.lavelo.es"
+        }
+    },
+    "host": "localhost:5001",
+    "basePath": "/",
+    "schemes": ["http"],
+    "tags": [
+        {"name": "Posts", "description": "Gestión de posts del blog"},
+        {"name": "Content", "description": "Generación de contenido (textos, imágenes, videos)"},
+        {"name": "Images", "description": "Generación y procesamiento de imágenes con Fal.ai"},
+        {"name": "Videos", "description": "Generación de videos con IA (SeeDance 1.0)"},
+        {"name": "OAuth", "description": "Autenticación OAuth para redes sociales"}
+    ]
+}
+
+swagger = Swagger(app, config=swagger_config, template=swagger_template)
 
 # Servir archivos de la carpeta falai
 from flask import send_from_directory
@@ -126,6 +168,40 @@ def oauth2callback():
 # API: Obtener todos los posts
 @app.route('/api/posts', methods=['GET'])
 def get_posts():
+    """
+    Obtener todos los posts del blog
+    ---
+    tags:
+      - Posts
+    responses:
+      200:
+        description: Lista de posts obtenida exitosamente
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+              example: true
+            posts:
+              type: array
+              items:
+                type: object
+                properties:
+                  codigo:
+                    type: string
+                    example: "20251024-1"
+                  titulo:
+                    type: string
+                    example: "Optimiza tu Posición de Triatlón"
+                  estado:
+                    type: string
+                    example: "IMAGE_PROMPT_AWAITING"
+                  drive_folder_id:
+                    type: string
+                    example: "1abc123def456"
+      500:
+        description: Error del servidor
+    """
     try:
         posts = sheets_service.get_posts()
         return jsonify({'success': True, 'posts': posts})
@@ -135,6 +211,38 @@ def get_posts():
 # API: Inicializar estructura de carpetas de un post
 @app.route('/api/posts/<codigo>/init-folders', methods=['POST'])
 def init_post_folders(codigo):
+    """
+    Inicializar estructura de carpetas en Drive
+    ---
+    tags:
+      - Posts
+    parameters:
+      - name: codigo
+        in: path
+        type: string
+        required: true
+        description: Código del post
+        example: "20251024-1"
+    responses:
+      200:
+        description: Carpetas inicializadas exitosamente
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+            message:
+              type: string
+            folders_created:
+              type: array
+              items:
+                type: string
+              example: ["textos", "imagenes", "videos"]
+      404:
+        description: Post no encontrado
+      500:
+        description: Error del servidor
+    """
     try:
         # Obtener post
         posts = sheets_service.get_posts()
@@ -1515,7 +1623,53 @@ def generate_video():
 
 @app.route('/api/generate-video-text', methods=['POST'])
 def generate_video_text():
-    """Genera video desde texto usando SeeDance 1.0 Pro Text-to-Video"""
+    """
+    Generar video desde texto usando SeeDance 1.0 Pro (Text-to-Video)
+    
+    NOTA: Este endpoint NO soporta imágenes de referencia. Solo genera desde texto.
+    ---
+    tags:
+      - Videos
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          required:
+            - prompt
+          properties:
+            prompt:
+              type: string
+              description: Descripción del video a generar
+              example: "Ciclista profesional en bicicleta de carretera, paisaje montañoso"
+            resolution:
+              type: string
+              description: Resolución del video
+              enum: ["720p", "1024p"]
+              default: "720p"
+    responses:
+      200:
+        description: Video generado exitosamente
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+            video_url:
+              type: string
+              description: URL temporal del video generado
+            duration:
+              type: number
+              description: Tiempo de generación en segundos
+            resolution:
+              type: string
+              example: "1280x720"
+      400:
+        description: Parámetros inválidos
+      500:
+        description: Error en la generación
+    """
     try:
         data = request.json
         prompt = data.get('prompt')
@@ -1568,7 +1722,59 @@ def generate_video_text():
 
 @app.route('/api/generate-video-image', methods=['POST'])
 def generate_video_image():
-    """Genera video desde imagen usando SeeDance 1.0 Pro Image-to-Video"""
+    """
+    Generar video desde imagen usando SeeDance 1.0 Pro (Image-to-Video)
+    
+    NOTA: Este endpoint NO soporta imágenes de referencia adicionales. 
+    Solo anima la imagen base proporcionada.
+    ---
+    tags:
+      - Videos
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          required:
+            - prompt
+            - image_url
+          properties:
+            prompt:
+              type: string
+              description: Descripción del movimiento/animación
+              example: "Ciclista pedaleando en carretera de montaña"
+            image_url:
+              type: string
+              description: URL de la imagen base a animar
+              example: "https://fal.media/files/..."
+            resolution:
+              type: string
+              description: Resolución del video
+              enum: ["720p", "1024p"]
+              default: "720p"
+    responses:
+      200:
+        description: Video generado exitosamente
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+            video_url:
+              type: string
+              description: URL temporal del video generado
+            duration:
+              type: number
+              description: Tiempo de generación en segundos
+            resolution:
+              type: string
+              example: "1280x720"
+      400:
+        description: Parámetros inválidos
+      500:
+        description: Error en la generación
+    """
     try:
         data = request.json
         prompt = data.get('prompt')
@@ -1868,7 +2074,59 @@ def upload_manual_image(codigo):
 # API: Chat con IA para crear posts
 @app.route('/api/chat', methods=['POST'])
 def chat():
-    """Endpoint de chat con Claude para crear posts"""
+    """
+    Chat con Claude usando herramientas MCP
+    ---
+    tags:
+      - Content
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          required:
+            - message
+          properties:
+            message:
+              type: string
+              description: Mensaje del usuario
+              example: "Ayúdame a crear un nuevo post sobre nutrición en triatlón"
+            history:
+              type: array
+              description: Historial de conversación
+              items:
+                type: object
+                properties:
+                  role:
+                    type: string
+                    enum: ["user", "assistant"]
+                  content:
+                    type: string
+    responses:
+      200:
+        description: Respuesta de Claude
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+            response:
+              type: string
+              description: Respuesta de Claude
+            tool_results:
+              type: array
+              description: Resultados de herramientas ejecutadas
+              items:
+                type: object
+            history:
+              type: array
+              description: Historial actualizado
+      400:
+        description: Mensaje requerido
+      500:
+        description: Error en el chat
+    """
     try:
         data = request.json
         message = data.get('message')
@@ -2397,7 +2655,60 @@ def execute_regenerate_image(tool_input):
 # API: Mejorar prompt con selecciones visuales e imágenes de referencia
 @app.route('/api/improve-prompt-visual', methods=['POST'])
 def improve_prompt_visual():
-    """Mejora un prompt de imagen usando selecciones visuales e imágenes de referencia del PromptBuilder"""
+    """
+    Mejorar prompt con selecciones visuales (Prompt Builder)
+    
+    ✅ SOPORTA hasta 2 imágenes de referencia que se guardan en Drive.
+    ---
+    tags:
+      - Images
+    consumes:
+      - multipart/form-data
+    parameters:
+      - name: codigo
+        in: formData
+        type: string
+        required: true
+        description: Código del post
+        example: "20251024-1"
+      - name: prompt_original
+        in: formData
+        type: string
+        required: true
+        description: Prompt original del usuario
+        example: "Ciclista profesional en bicicleta de carretera"
+      - name: selections
+        in: formData
+        type: string
+        required: false
+        description: JSON con selecciones visuales (estilo, composición, etc.)
+        example: '{"style": "realistic", "composition": "centered"}'
+      - name: reference_images
+        in: formData
+        type: file
+        required: false
+        description: Imágenes de referencia (hasta 2)
+    responses:
+      200:
+        description: Prompt mejorado exitosamente
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+            improved_prompt:
+              type: string
+              description: Prompt mejorado con detalles visuales
+            metadata:
+              type: object
+              description: Metadata de referencias guardadas
+      400:
+        description: Parámetros requeridos faltantes
+      404:
+        description: Post no encontrado
+      500:
+        description: Error en el procesamiento
+    """
     try:
         # Obtener datos del FormData
         codigo = request.form.get('codigo')
@@ -2543,7 +2854,68 @@ Genera SOLO el prompt mejorado, sin explicaciones."""
 
 @app.route('/api/generate-image', methods=['POST'])
 def generate_image():
-    """Generar imagen base usando Fal.ai SeaDream 4.0 con referencias"""
+    """
+    Generar imagen base usando Fal.ai SeaDream 4.0
+    
+    ✅ SOPORTA hasta 2 imágenes de referencia con pesos configurables.
+    Las referencias se leen automáticamente desde Drive si existen.
+    ---
+    tags:
+      - Images
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          required:
+            - codigo
+          properties:
+            codigo:
+              type: string
+              description: Código del post
+              example: "20251024-1"
+            num_images:
+              type: integer
+              description: Número de variaciones a generar
+              default: 4
+              minimum: 1
+              maximum: 4
+    responses:
+      200:
+        description: Imágenes generadas exitosamente
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+            message:
+              type: string
+              example: "4 imágenes generadas correctamente"
+            images:
+              type: array
+              items:
+                type: object
+                properties:
+                  filename:
+                    type: string
+                    example: "20251024-1_imagen_base.png"
+                  file_id:
+                    type: string
+                    example: "1xyz789abc"
+                  url:
+                    type: string
+                    example: "https://fal.media/files/..."
+            references_used:
+              type: integer
+              description: Número de imágenes de referencia utilizadas
+      400:
+        description: Parámetros inválidos
+      404:
+        description: Post o prompt no encontrado
+      500:
+        description: Error en la generación
+    """
     try:
         codigo = request.json.get('codigo')
         
@@ -2692,7 +3064,43 @@ def generate_image():
 # ============================================
 @app.route('/api/generate-instructions-from-post', methods=['POST'])
 def generate_instructions_from_post():
-    """Genera instrucciones para imagen basándose en el contenido del post"""
+    """
+    Generar instrucciones de imagen desde contenido del post
+    ---
+    tags:
+      - Content
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          required:
+            - codigo
+          properties:
+            codigo:
+              type: string
+              description: Código del post
+              example: "20251024-1"
+    responses:
+      200:
+        description: Instrucciones generadas exitosamente
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+            instructions:
+              type: string
+              description: Instrucciones generadas para la imagen
+              example: "Ciclista profesional ajustando posición en bicicleta..."
+      400:
+        description: Código requerido
+      404:
+        description: Post no encontrado
+      500:
+        description: Error en la generación
+    """
     try:
         data = request.json
         codigo = data.get('codigo')
@@ -2862,7 +3270,66 @@ def generate_final_prompt():
 # ============================================
 @app.route('/api/test-fal', methods=['POST'])
 def test_fal_generate():
-    """Endpoint de prueba para Fal.ai SeaDream 4.0"""
+    """
+    Generar imágenes de prueba con Fal.ai (Prompt Builder)
+    
+    ✅ SOPORTA hasta 2 imágenes de referencia en base64.
+    ---
+    tags:
+      - Images
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          required:
+            - prompt
+          properties:
+            prompt:
+              type: string
+              description: Prompt para generar la imagen
+              example: "Professional cyclist on road bike, mountain landscape"
+            reference_images:
+              type: array
+              description: Array de imágenes en base64 (máx 2)
+              items:
+                type: string
+                format: base64
+            num_images:
+              type: integer
+              description: Número de variaciones a generar
+              default: 4
+              minimum: 1
+              maximum: 4
+    responses:
+      200:
+        description: Imágenes generadas exitosamente
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+            message:
+              type: string
+            images:
+              type: array
+              items:
+                type: object
+                properties:
+                  filename:
+                    type: string
+                  url:
+                    type: string
+                  local_path:
+                    type: string
+            timestamp:
+              type: string
+      400:
+        description: Prompt requerido
+      500:
+        description: Error en la generación
+    """
     try:
         data = request.json
         prompt = data.get('prompt', '')

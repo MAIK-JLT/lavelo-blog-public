@@ -14,9 +14,45 @@ Sistema automatizado end-to-end para crear y publicar contenido semanal de triat
 - **Repo local:** `~/lavelo-blog/`
 - **Repo GitHub:** https://github.com/MAIK-JLT/lavelo-blog-public
 - **Producción blog:** https://blog.lavelo.es
-- **Panel de control:** https://blog.lavelo.es/panel/ (pendiente)
+- **Panel de control:** https://blog.lavelo.es/panel/
+- **API Docs (Swagger):** http://localhost:5001/api/docs
 
-### 2. ESTRUCTURA DEL REPOSITORIO
+### 2. ARQUITECTURA DE SERVICIOS
+
+```
+┌─────────────────────────────────────┐
+│         FRONTENDS                   │
+├─────────────────────────────────────┤
+│  • Navegador Web                    │
+│  • Claude Desktop (MCP)             │
+│  • Cursor/Windsurf                  │
+└──────────┬──────────────────────────┘
+           │
+           ▼
+┌─────────────────────────────────────┐
+│   MCP SERVER (mcp_server.py)        │
+│   Protocolo: MCP (stdio)            │
+│   Wrapper sobre Flask API           │
+└──────────┬──────────────────────────┘
+           │ HTTP
+           ▼
+┌─────────────────────────────────────┐
+│   FLASK API (server.py)             │
+│   Puerto: 5001                      │
+│   Backend único con toda la lógica  │
+└──────────┬──────────────────────────┘
+           │
+           ▼
+┌─────────────────────────────────────┐
+│   SERVICIOS EXTERNOS                │
+│   • Google Drive/Sheets             │
+│   • Claude API                      │
+│   • Fal.ai (SeaDream, SeeDance)    │
+│   • Cloudinary                      │
+└─────────────────────────────────────┘
+```
+
+### 3. ESTRUCTURA DEL REPOSITORIO
 
 ```
 ~/lavelo-blog/
@@ -33,18 +69,27 @@ Sistema automatizado end-to-end para crear y publicar contenido semanal de triat
 ├── themes/
 │   └── PaperMod/
 ├── public/               # Generado por Hugo (se sube a Git)
-├── panel/                # Panel de control web (NUEVO - PENDIENTE)
+├── panel/                # Panel de control web
 │   ├── index.html
+│   ├── details.html
 │   ├── css/
 │   │   └── style.css
 │   └── js/
-│       └── app.js
-├── api/                  # Backend para el panel (NUEVO - PENDIENTE)
-│   ├── server.py
-│   └── routes/
-│       ├── sheets.py
-│       ├── generate.py
-│       └── drive.py
+│       ├── app.js
+│       └── chat.js
+├── falai/                # Generador de imágenes/videos
+│   ├── index.html
+│   ├── advanced_settings.html
+│   └── social_connect.html
+├── api/                  # Backend Flask
+│   ├── server.py         # API REST principal
+│   ├── sheets_service.py # Google Sheets/Drive
+│   ├── requirements.txt
+│   └── venv/
+├── mcp_server.py         # MCP Server para IAs
+├── claude_desktop_config.json  # Config Claude Desktop
+├── MCP_README.md         # Documentación MCP
+├── API_DOCUMENTATION.md  # Documentación API
 ├── scripts/              # Scripts de automatización (NUEVO - PENDIENTE)
 │   ├── generate_texts.py
 │   ├── generate_images.py
@@ -58,12 +103,12 @@ Sistema automatizado end-to-end para crear y publicar contenido semanal de triat
 └── README.md
 ```
 
-### 3. GOOGLE DRIVE (Almacenamiento)
+### 4. GOOGLE DRIVE (Almacenamiento)
 - **Carpeta base:** `Lavelo Blog Content/Posts/2025/`
 - **Estructura por meses:** 12 carpetas (01-Enero hasta 12-Diciembre)
 - **Estructura por posts:** Ver sección "Nomenclatura"
 
-### 4. GOOGLE SHEETS (Base de Datos y Dashboard)
+### 5. GOOGLE SHEETS (Base de Datos y Dashboard)
 - **Sheet:** "Lavelo Blog - Content Calendar"
 - **Función:** Control de estados, validaciones y publicación programada
 - **Ver:** [Abrir Content Calendar](https://docs.google.com/spreadsheets/d/1f88LjU0gcBaYm_pqC9c5R29slGLHO6YASesZ8trouug/edit)
@@ -425,13 +470,115 @@ Estado "ERROR" → 🔴 Rojo (revisar)
 
 ---
 
+## 🤖 MCP SERVER - INTEGRACIÓN CON IAs
+
+### ¿Qué es el MCP Server?
+Servidor que expone las funcionalidades del API Flask a IAs externas (Claude Desktop, Cursor, etc.) usando el protocolo MCP (Model Context Protocol).
+
+### Características:
+- **Wrapper ligero** sobre Flask API
+- **No duplica lógica** - Solo traduce MCP → HTTP
+- **9 herramientas disponibles** para IAs
+- **Configuración simple** en Claude Desktop
+
+### Herramientas MCP Disponibles:
+
+**Posts:**
+- `list_posts` - Lista todos los posts
+- `create_post` - Crea nuevo post
+- `get_post` - Obtiene detalles de un post
+- `init_post_folders` - Inicializa carpetas en Drive
+
+**Imágenes:**
+- `generate_image` - Genera imagen (✅ soporta referencias)
+- `generate_instructions_from_post` - Genera instrucciones
+
+**Videos:**
+- `generate_video_text` - Text-to-Video (❌ no soporta referencias)
+- `generate_video_image` - Image-to-Video (❌ no soporta referencias)
+
+**Chat:**
+- `chat` - Interactúa con Claude
+
+### Configuración:
+
+**1. Instalar dependencia:**
+```bash
+pip install mcp
+```
+
+**2. Configurar Claude Desktop:**
+```json
+{
+  "mcpServers": {
+    "lavelo-blog": {
+      "command": "/Users/julioizquierdo/lavelo-blog/api/venv/bin/python",
+      "args": ["/Users/julioizquierdo/lavelo-blog/mcp_server.py"]
+    }
+  }
+}
+```
+
+**3. Reiniciar Claude Desktop**
+
+### Uso:
+```
+Usuario: "Lista todos los posts del blog"
+Claude: [Usa tool list_posts automáticamente]
+
+Usuario: "Crea un post sobre nutrición en triatlón"
+Claude: [Usa tool create_post]
+```
+
+**Ver:** `MCP_README.md` para documentación completa
+
+---
+
+## 📚 DOCUMENTACIÓN API (SWAGGER)
+
+### Acceso:
+- **Desarrollo:** http://localhost:5001/api/docs
+- **Producción:** https://blog.lavelo.es/api/docs
+
+### Características:
+- ✅ Documentación automática desde código
+- ✅ Interfaz interactiva (Try it out)
+- ✅ Ejemplos de request/response
+- ✅ Validación de parámetros
+- ✅ Se actualiza automáticamente
+
+### Endpoints Documentados:
+
+**Posts (2):**
+- `GET /api/posts`
+- `POST /api/posts/<codigo>/init-folders`
+
+**Content (2):**
+- `POST /api/chat`
+- `POST /api/generate-instructions-from-post`
+
+**Images (3):**
+- `POST /api/generate-image` (✅ soporta referencias)
+- `POST /api/improve-prompt-visual` (✅ soporta referencias)
+- `POST /api/test-fal` (✅ soporta referencias)
+
+**Videos (2):**
+- `POST /api/generate-video-text` (❌ no soporta referencias)
+- `POST /api/generate-video-image` (❌ no soporta referencias)
+
+**Ver:** `api/API_DOCUMENTATION.md` para ejemplos de uso
+
+---
+
 ## 🛠️ HERRAMIENTAS Y TECNOLOGÍA
 
 ### Generación de Contenido:
 - **Claude 3.5 Sonnet (claude-3-5-sonnet-20241022):** Chat integrado, creación de posts, mejora de prompts
 - **Claude Haiku 4.5 (claude-haiku-4-5-20251001):** Textos adaptados y prompts (rápido y económico)
-- **DALL-E 3 (OpenAI):** Generación de imágenes ($0.04/imagen 1024x1024)
-- **Veo 3.1 Fast (Google):** Generación de videos (15 seg, 1080p) con API
+- **Fal.ai SeaDream 4.0:** Generación de imágenes con referencias visuales
+- **Fal.ai SeeDance 1.0 Pro:** Generación de videos (Text-to-Video e Image-to-Video)
+  - 720p: $0.30/video (económico)
+  - 1024p: $0.74/video (alta calidad)
 
 ### Procesamiento:
 - **Pillow (PIL):** Crop y resize de imágenes
@@ -571,9 +718,137 @@ Fase 8 (Formatos Video) → No resetea nada
 
 ---
 
+## 🎨 GENERADOR DE IMÁGENES Y VIDEOS (`/falai/`)
+
+### **Descripción**
+Herramienta independiente para generar imágenes y videos con IA usando Fal.ai. Permite experimentar con prompts, referencias visuales y ajustes avanzados antes de integrar en el workflow principal.
+
+### **Ubicación**
+- **URL:** `http://localhost:5001/falai/index.html`
+- **Archivos:**
+  - `falai/index.html` - Interfaz principal
+  - `falai/advanced_settings.html` - Configuración de ajustes visuales
+  - `falai/social_connect.html` - Gestión de conexiones a redes sociales
+
+### **Funcionalidades**
+
+#### **1. System Prompt**
+- Prompt base para SeaDream 4.0
+- Configurable y editable
+- Se aplica a todas las generaciones
+
+#### **2. Generación desde Posts**
+- Selector de posts existentes (con `base.txt`)
+- Genera instrucciones automáticas con Claude
+- Pre-rellena User Prompt
+
+#### **3. User Prompt**
+- Descripción personalizada de la imagen
+- Editable con contador de caracteres
+- Sistema de guardado con confirmación visual
+
+#### **4. Text Overlay**
+- Añadir texto sobre la imagen generada
+- Configurable: contenido, posición, tamaño, color
+- Se incluye en el prompt final
+
+#### **5. Imágenes de Referencia**
+- Hasta 2 imágenes de referencia
+- Subida desde archivo
+- Selección de uso: estilo, composición, iluminación
+
+#### **6. Ajustes Avanzados**
+- Popup con configuración detallada
+- Categorías:
+  - 📐 Perspectiva (close-up, wide angle, bird's eye, etc.)
+  - 🖼️ Composición (centrado, regla de tercios, simétrico, etc.)
+  - 💡 Iluminación (natural, golden hour, studio, etc.)
+  - 🎨 Estilo (photorealistic, cinematic, editorial, etc.)
+  - 📸 Realismo (hyper-realistic, realistic, stylized, etc.)
+- Preview de selecciones en módulo principal
+- Guardado en LocalStorage
+
+#### **7. Generación de Prompt Final con IA**
+- Claude analiza todos los inputs
+- Genera prompt optimizado para SeaDream 4.0
+- Máximo 500 caracteres
+- Incorpora referencias, ajustes y text overlay
+
+#### **8. Generación de Imágenes**
+- 4 variaciones simultáneas con SeaDream 4.0
+- Resolución: 1024x1024
+- Preview en grid
+- Descarga individual
+
+#### **9. Generación de Videos**
+- **Text-to-Video:** Genera video desde prompt
+- **Image-to-Video:** Anima imagen seleccionada
+- Modelo: SeeDance 1.0 Pro
+- Resoluciones:
+  - 720p (1280x720) - $0.30/video
+  - 1024p (1024x1024) - $0.74/video
+- Duración: ~6 segundos
+- Preview con player integrado
+- Descarga directa
+
+#### **10. Conexión a Redes Sociales**
+- Preview de estado de conexiones
+- Gestión mediante popup
+- Preparado para OAuth (pendiente implementación)
+- Plataformas: Instagram, LinkedIn, Twitter
+
+### **Flujo de Trabajo**
+
+```
+1. Configurar System Prompt (opcional)
+2. Seleccionar post existente O escribir User Prompt
+3. Añadir text overlay (opcional)
+4. Subir imágenes de referencia (opcional)
+5. Configurar ajustes avanzados (opcional)
+6. Generar Prompt Final con IA
+7. Generar 4 Variaciones de Imagen
+8. Seleccionar imagen para video (opcional)
+9. Generar Text-to-Video O Image-to-Video
+10. Conectar redes sociales (preparación futura)
+```
+
+### **Endpoints API Utilizados**
+
+```python
+# Generación de contenido
+POST /api/generate-final-prompt      # Genera prompt con Claude
+POST /api/test-fal                    # Genera 4 imágenes con SeaDream
+POST /api/generate-video-text         # Text-to-Video con SeeDance
+POST /api/generate-video-image        # Image-to-Video con SeeDance
+
+# Posts
+GET  /api/posts                       # Lista posts disponibles
+POST /api/generate-instructions-from-post  # Genera instrucciones desde post
+
+# Redes sociales (preparados)
+GET  /api/social/status               # Estado de conexiones
+GET  /api/social/oauth/<platform>     # Inicia OAuth
+GET  /api/social/callback/<platform>  # Callback OAuth
+POST /api/social/publish              # Publica en redes
+```
+
+### **Tecnologías**
+
+- **Frontend:** HTML5, CSS3, JavaScript Vanilla
+- **Backend:** Flask (Python 3.13)
+- **IA:**
+  - Claude Haiku 4.5: Generación de prompts
+  - Fal.ai SeaDream 4.0: Generación de imágenes
+  - Fal.ai SeeDance 1.0 Pro: Generación de videos
+- **Almacenamiento:**
+  - LocalStorage: Ajustes avanzados
+  - Google Sheets: Posts y tokens (futuro)
+
+---
+
 ## 📋 ROADMAP - PRÓXIMOS PASOS
 
-### ✅ FASE ACTUAL: PANEL WEB OPERATIVO (COMPLETADO)
+### ✅ FASE ACTUAL: GENERADOR DE IMÁGENES Y VIDEOS (COMPLETADO)
 - [x] Blog Hugo funcionando en producción
 - [x] Estructura de carpetas en Google Drive
 - [x] MCP de Google Drive configurado
@@ -588,12 +863,61 @@ Fase 8 (Formatos Video) → No resetea nada
 - [x] Subida manual de imágenes (alternativa a IA)
 - [x] Regeneración de prompts con IA
 - [x] Reseteo automático de fases dependientes
+- [x] **Generador de imágenes con Fal.ai (`/falai/index.html`)**
+  - [x] System Prompt configurable
+  - [x] User Prompt editable con guardado
+  - [x] Generación desde posts existentes
+  - [x] Text overlay en imágenes
+  - [x] Imágenes de referencia (hasta 2)
+  - [x] Ajustes avanzados (perspectiva, composición, iluminación, estilo)
+  - [x] Generación de prompt final con IA
+  - [x] Generación de 4 variaciones con SeaDream 4.0
+- [x] **Generador de videos con SeeDance 1.0 Pro**
+  - [x] Text-to-Video (desde prompt)
+  - [x] Image-to-Video (desde imagen generada)
+  - [x] Selector de resolución (720p/1024p)
+  - [x] Preview y descarga de videos
+- [x] **Módulo de conexión a redes sociales (estructura base)**
+  - [x] Preview de conexiones (Instagram, LinkedIn, Twitter)
+  - [x] Popup de gestión de conexiones
+  - [x] Endpoints OAuth preparados (pendiente implementación real)
 
 ---
 
 ### 🎯 PRÓXIMOS PASOS
 
-### 🔧 PASO 1: GENERACIÓN AUTOMÁTICA DE CONTENIDO (PRÓXIMO)
+### 🔧 PASO 1: IMPLEMENTACIÓN COMPLETA DE OAUTH PARA REDES SOCIALES (PRÓXIMO)
+
+**Objetivo:** Completar la integración OAuth real con Instagram, LinkedIn y Twitter.
+
+**1.1 Configurar Apps en cada plataforma**
+- Crear app en Meta Developer (Instagram/Facebook)
+- Crear app en LinkedIn Developer
+- Crear app en Twitter Developer Portal
+- Obtener Client ID y Client Secret de cada una
+- Configurar redirect URIs
+
+**1.2 Implementar flujo OAuth completo**
+- Generar URLs de autorización reales
+- Implementar callbacks para recibir tokens
+- Intercambiar authorization code por access token
+- Implementar refresh de tokens
+
+**1.3 Almacenamiento seguro de tokens**
+- Crear hoja "social_tokens" en Google Sheets
+- Implementar encriptación de tokens (Fernet)
+- Guardar tokens con metadata (expires_at, refresh_token)
+- Leer tokens desde Sheets para publicar
+
+**1.4 Implementar publicación real**
+- Instagram Graph API: Publicar imagen + caption
+- LinkedIn API: Crear post con imagen
+- Twitter API v2: Tweet con imagen
+- Manejo de errores y rate limits
+
+---
+
+### 🔧 PASO 2: GENERACIÓN AUTOMÁTICA DE CONTENIDO
 
 **Objetivo:** Implementar botones VALIDATE que ejecuten scripts de generación automática.
 
@@ -836,7 +1160,13 @@ Require valid-user
 
 **Proyecto:** Lavelo Blog Automation  
 **Inicio:** Octubre 2025  
-**Última actualización:** 23 de octubre de 2025
+**Última actualización:** 29 de octubre de 2025
+
+**Nuevas funcionalidades:**
+- ✅ MCP Server para integración con IAs (Claude Desktop, Cursor)
+- ✅ Documentación API con Swagger (auto-generada)
+- ✅ 9 herramientas MCP disponibles
+- ✅ Arquitectura claramente documentada
 
 **Google Cloud:**
 - Proyecto: `lavelo-blog-automation`

@@ -617,6 +617,69 @@ class SheetsService:
             print(f"❌ Error guardando imagen {filename}: {str(e)}")
             return None
     
+    def save_video_to_drive(self, folder_id, filename, video_bytes):
+        """Guardar video binario en Google Drive y devolver file_id"""
+        try:
+            if not hasattr(self, 'drive_service'):
+                self.drive_service = build('drive', 'v3', credentials=self.creds)
+            
+            # Buscar si el archivo ya existe
+            query = f"name='{filename}' and '{folder_id}' in parents and trashed=false"
+            results = self.drive_service.files().list(
+                q=query,
+                fields='files(id, name)'
+            ).execute()
+            
+            files = results.get('files', [])
+            
+            # Preparar contenido
+            file_content = io.BytesIO(video_bytes)
+            media = MediaIoBaseUpload(file_content, mimetype='video/mp4', resumable=True)
+            
+            if files:
+                # Actualizar archivo existente
+                file_id = files[0]['id']
+                self.drive_service.files().update(
+                    fileId=file_id,
+                    media_body=media
+                ).execute()
+                print(f"✅ Video actualizado: {filename} (ID: {file_id})")
+            else:
+                # Crear nuevo archivo
+                file_metadata = {
+                    'name': filename,
+                    'parents': [folder_id],
+                    'mimeType': 'video/mp4'
+                }
+                result = self.drive_service.files().create(
+                    body=file_metadata,
+                    media_body=media,
+                    fields='id'
+                ).execute()
+                file_id = result.get('id')
+                print(f"✅ Video creado: {filename} (ID: {file_id})")
+            
+            # Hacer el archivo público (anyone with link can view)
+            try:
+                permission = {
+                    'type': 'anyone',
+                    'role': 'reader'
+                }
+                self.drive_service.permissions().create(
+                    fileId=file_id,
+                    body=permission,
+                    fields='id'
+                ).execute()
+                print(f"✅ Permisos públicos configurados para {filename}")
+            except Exception as perm_error:
+                print(f"⚠️ No se pudieron configurar permisos públicos: {perm_error}")
+            
+            return file_id
+            
+        except Exception as e:
+            print(f"❌ Error guardando video {filename}: {str(e)}")
+            return None
+    
     def get_image_from_drive(self, folder_id, filename):
         """Leer imagen desde Google Drive y devolver bytes"""
         try:
