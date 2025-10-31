@@ -90,6 +90,18 @@ def serve_falai(filename):
     falai_dir = os.path.join(os.path.dirname(__file__), '..', 'falai')
     return send_from_directory(falai_dir, filename)
 
+@app.route('/panel/<path:filename>')
+def serve_panel(filename):
+    """Servir archivos estáticos de la carpeta panel"""
+    panel_dir = os.path.join(os.path.dirname(__file__), '..', 'panel')
+    return send_from_directory(panel_dir, filename)
+
+@app.route('/es/<path:filename>')
+def serve_es(filename):
+    """Servir archivos estáticos de la carpeta es"""
+    es_dir = os.path.join(os.path.dirname(__file__), '..', 'es')
+    return send_from_directory(es_dir, filename)
+
 # Configurar CORS correctamente
 CORS(app, 
      resources={r"/api/*": {
@@ -148,6 +160,8 @@ def auth_login():
 # OAuth2: Callback
 @app.route('/oauth2callback')
 def oauth2callback():
+    global sheets_service  # Declarar global PRIMERO
+    
     state = session['state']
     flow = sheets_service.get_oauth_flow()
     flow.fetch_token(authorization_response=request.url)
@@ -163,6 +177,11 @@ def oauth2callback():
     }
     
     sheets_service.authenticate(session['credentials'])
+    
+    # Forzar reconstrucción de servicios
+    from sheets_service import SheetsService
+    sheets_service = SheetsService()
+    
     return redirect('/')
 
 # API: Obtener todos los posts
@@ -2266,7 +2285,7 @@ REGLAS:
 Categorías: racing, training, training-science"""
 
         response = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model=os.getenv('CLAUDE_MODEL', 'claude-3-5-sonnet-20240620'),
             max_tokens=4096,
             system=system_prompt,
             tools=tools,
@@ -2848,6 +2867,403 @@ Genera SOLO el prompt mejorado, sin explicaciones."""
         
     except Exception as e:
         print(f"❌ Error mejorando prompt visual: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+# ============================================
+# ENDPOINT COMPUESTO PARA IAs (MCP)
+# ============================================
+
+@app.route('/api/generate-complete-post', methods=['POST'])
+def generate_complete_post():
+    """
+    🚀 ENDPOINT MAESTRO: Genera post completo de principio a fin
+    
+    Diseñado para Claude Desktop. Ejecuta todo el flujo automáticamente:
+    1. Genera tema (si no se proporciona)
+    2. Genera título y contenido con Claude
+    3. Crea post en Sheets + Drive (reutiliza execute_create_post)
+    4. Genera prompt + 4 imágenes (reutiliza generate_post_images_complete)
+    
+    ✅ SOPORTA referencias visuales si existen
+    ---
+    tags:
+      - Composite
+    parameters:
+      - name: body
+        in: body
+        required: false
+        schema:
+          type: object
+          properties:
+            tema:
+              type: string
+              description: Tema del post (opcional, si no se da, se genera uno)
+              example: "Nutrición en Ironman 70.3"
+            categoria:
+              type: string
+              description: Categoría del post
+              enum: [training, racing, training-science]
+              default: "training"
+    responses:
+      200:
+        description: Post completo generado exitosamente
+      500:
+        description: Error en la generación
+    """
+    try:
+        tema = request.json.get('tema') if request.json else None
+        categoria = request.json.get('categoria', 'training') if request.json else 'training'
+        
+        print(f"\n🚀 === GENERACIÓN COMPLETA DE POST ===")
+        print(f"📝 Tema: {tema or 'Auto-generado'}")
+        print(f"📂 Categoría: {categoria}")
+        
+        if not sheets_service.ensure_authenticated():
+            return jsonify({'error': 'Error de autenticación con Google'}), 500
+        
+        client = Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
+        
+        # 1. Generar tema si no se proporciona
+        if not tema:
+            print(f"🎲 Generando tema automáticamente...")
+            tema_generation = client.messages.create(
+                model=os.getenv('CLAUDE_MODEL', 'claude-3-5-sonnet-20240620'),
+                max_tokens=200,
+                messages=[{
+                    "role": "user",
+                    "content": f"""Genera un tema interesante y relevante para un post de blog de triatlón.
+
+Categoría: {categoria}
+
+Requisitos:
+- Tema específico y accionable
+- Relevante para triatletas de nivel medio-avanzado
+- Enfocado en mejorar rendimiento
+- Una frase corta (máximo 10 palabras)
+
+Ejemplos: "Técnicas de escalada en bicicleta para triatlón", "Periodización inversa en fase base"
+
+Responde SOLO con el tema, sin explicaciones."""
+                }]
+            )
+            tema = tema_generation.content[0].text.strip()
+            print(f"✅ Tema generado: {tema}")
+        
+        # 2. Generar título y contenido
+        print(f"📝 Generando contenido con Claude...")
+        content_generation = client.messages.create(
+            model=os.getenv('CLAUDE_MODEL', 'claude-3-5-sonnet-20240620'),
+            max_tokens=4096,
+            messages=[{
+                "role": "user",
+                "content": f"""Crea un post completo para el blog de Lavelo Triathlon Training sobre: {tema}
+
+Categoría: {categoria}
+
+Estructura:
+1. Título atractivo (máximo 80 caracteres)
+2. Contenido completo (800-1200 palabras)
+
+Estilo: Profesional pero motivador, basado en ciencia del deporte, consejos prácticos, tono cercano.
+
+Formato de respuesta:
+TÍTULO: [tu título aquí]
+
+CONTENIDO:
+[tu contenido aquí]
+
+NO incluyas hashtags, emojis ni llamadas a acción de redes sociales."""
+            }]
+        )
+        
+        response_text = content_generation.content[0].text.strip()
+        
+        # Parsear título y contenido
+        if "TÍTULO:" in response_text and "CONTENIDO:" in response_text:
+            parts = response_text.split("CONTENIDO:")
+            titulo = parts[0].replace("TÍTULO:", "").strip()
+            contenido = parts[1].strip()
+        else:
+            lines = response_text.split("\n")
+            titulo = lines[0].strip()
+            contenido = "\n".join(lines[1:]).strip()
+        
+        print(f"✅ Título: {titulo[:50]}...")
+        print(f"✅ Contenido: {len(contenido)} caracteres")
+        
+        # 3. Crear post (reutiliza función existente)
+        print(f"💾 Creando post en Sheets + Drive...")
+        post_result = execute_create_post({
+            'titulo': titulo,
+            'contenido': contenido,
+            'categoria': categoria,
+            'idea': tema
+        })
+        
+        if not post_result.get('success'):
+            return jsonify(post_result), 500
+        
+        codigo = post_result['codigo']
+        print(f"✅ Post creado: {codigo}")
+        
+        # 4. Generar prompt + imágenes (llamar internamente)
+        print(f"🎨 Generando prompt e imágenes...")
+        
+        # Hacer request interno al endpoint
+        import requests as internal_requests
+        images_response = internal_requests.post(
+            'http://localhost:5001/api/generate-post-images-complete',
+            json={'codigo': codigo},
+            timeout=120
+        )
+        
+        images_data = images_response.json()
+        
+        if not images_data.get('success'):
+            return jsonify({
+                'success': False,
+                'codigo': codigo,
+                'message': f'Post creado pero error en imágenes: {images_data.get("error")}'
+            }), 500
+        
+        print(f"✅ GENERACIÓN COMPLETA EXITOSA")
+        
+        return jsonify({
+            'success': True,
+            'codigo': codigo,
+            'titulo': titulo,
+            'contenido_preview': contenido[:200] + "...",
+            'prompt': images_data.get('prompt'),
+            'images_count': len(images_data.get('images', [])),
+            'message': f'✅ Post completo generado: {codigo}\n\n📝 {titulo}\n🖼️  {len(images_data.get("images", []))} imágenes\n📁 Todo guardado en Drive'
+        })
+        
+    except Exception as e:
+        print(f"❌ Error en generación completa: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/generate-post-images-complete', methods=['POST'])
+def generate_post_images_complete():
+    """
+    Endpoint compuesto: Genera prompt + 4 imágenes automáticamente
+    
+    Diseñado para IAs (Claude Desktop). Ejecuta todo el flujo en una llamada:
+    1. Lee base.txt del post
+    2. Genera prompt optimizado con Claude
+    3. Genera 4 variaciones de imagen con Fal.ai
+    4. Guarda todo en Drive
+    
+    ✅ SOPORTA referencias visuales si existen en Drive
+    ---
+    tags:
+      - Images
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          required:
+            - codigo
+          properties:
+            codigo:
+              type: string
+              description: Código del post
+              example: "20251024-1"
+    responses:
+      200:
+        description: Prompt e imágenes generadas exitosamente
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+            prompt:
+              type: string
+              description: Prompt generado
+            images:
+              type: array
+              items:
+                type: object
+                properties:
+                  filename:
+                    type: string
+                  file_id:
+                    type: string
+                  url:
+                    type: string
+            message:
+              type: string
+              example: "✅ Prompt e imágenes generadas correctamente"
+      400:
+        description: Código requerido
+      404:
+        description: Post no encontrado
+      500:
+        description: Error en la generación
+    """
+    try:
+        codigo = request.json.get('codigo')
+        
+        if not codigo:
+            return jsonify({'error': 'Código de post requerido'}), 400
+        
+        print(f"\n🎨 === GENERACIÓN COMPLETA PARA {codigo} ===")
+        
+        # 0. Asegurar autenticación
+        if not sheets_service.ensure_authenticated():
+            return jsonify({'error': 'Error de autenticación con Google'}), 500
+        
+        # 1. Obtener post y carpetas
+        posts = get_cached_posts()
+        post = next((p for p in posts if p['codigo'] == codigo), None)
+        
+        if not post or not post.get('drive_folder_id'):
+            return jsonify({'error': 'Post no encontrado o sin carpeta en Drive'}), 404
+        
+        folder_id = post['drive_folder_id']
+        textos_folder_id = sheets_service.get_subfolder_id(folder_id, 'textos', create_if_missing=True)
+        imagenes_folder_id = sheets_service.get_subfolder_id(folder_id, 'imagenes', create_if_missing=True)
+        
+        if not textos_folder_id or not imagenes_folder_id:
+            return jsonify({'error': 'No se pudieron crear las carpetas'}), 500
+        
+        # 2. Leer base.txt
+        base_filename = f"{codigo}_base.txt"
+        base_text = sheets_service.get_file_from_drive(textos_folder_id, base_filename)
+        
+        if not base_text:
+            return jsonify({'error': 'base.txt no encontrado. Crea el post primero.'}), 404
+        
+        print(f"📝 Base text: {base_text[:100]}...")
+        
+        # 3. Generar prompt con Claude
+        print(f"🤖 Generando prompt con Claude...")
+        
+        client = Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
+        
+        prompt_generation = client.messages.create(
+            model=os.getenv('CLAUDE_MODEL', 'claude-3-5-sonnet-20240620'),
+            max_tokens=1000,
+            messages=[{
+                "role": "user",
+                "content": f"""Genera un prompt optimizado para SeaDream 4.0 (generador de imágenes) basado en este contenido:
+
+{base_text}
+
+Requisitos:
+- Máximo 500 caracteres
+- Describe la escena visual principal
+- Incluye estilo fotográfico (photorealistic, cinematic, etc.)
+- Menciona iluminación y composición
+- Enfocado en triatlón/ciclismo/deporte
+
+Responde SOLO con el prompt, sin explicaciones."""
+            }]
+        )
+        
+        prompt = prompt_generation.content[0].text.strip()
+        print(f"✅ Prompt generado: {prompt[:100]}...")
+        
+        # 4. Guardar prompt en Drive
+        prompt_filename = f"{codigo}_prompt_imagen.txt"
+        sheets_service.save_text_to_drive(textos_folder_id, prompt_filename, prompt)
+        print(f"💾 Prompt guardado en Drive")
+        
+        # 5. Actualizar checkbox en Sheet
+        sheets_service.update_post_field(codigo, 'prompt_imagen', True)
+        
+        # 6. Leer referencias si existen
+        metadata_filename = f"{codigo}_referencias_metadata.json"
+        metadata_text = sheets_service.get_file_from_drive(textos_folder_id, metadata_filename)
+        
+        reference_images = []
+        if metadata_text:
+            try:
+                metadata = json.loads(metadata_text)
+                for ref in metadata.get('references', []):
+                    if ref.get('drive_file_id'):
+                        ref_content = sheets_service.get_file_content_by_id(ref['drive_file_id'])
+                        if ref_content:
+                            reference_images.append({
+                                "image_url": f"data:image/png;base64,{ref_content}",
+                                "weight": ref.get('weight', 0.8)
+                            })
+                print(f"🖼️  Cargadas {len(reference_images)} referencias desde Drive")
+            except:
+                pass
+        
+        # 7. Generar 4 imágenes con Fal.ai
+        print(f"🎨 Generando 4 imágenes con Fal.ai SeaDream 4.0...")
+        
+        fal_key = os.getenv('FAL_KEY')
+        if not fal_key:
+            return jsonify({'error': 'FAL_KEY no configurada'}), 500
+        
+        os.environ['FAL_KEY'] = fal_key
+        
+        arguments = {
+            "prompt": prompt,
+            "image_size": "square_hd",
+            "num_inference_steps": 28,
+            "guidance_scale": 3.5,
+            "num_images": 4
+        }
+        
+        if reference_images:
+            arguments["reference_images"] = reference_images
+            print(f"🖼️  Usando {len(reference_images)} referencias")
+        
+        import fal_client
+        result = fal_client.subscribe(
+            "fal-ai/bytedance/seedream/v4/edit" if reference_images else "fal-ai/bytedance/seedream/v4",
+            arguments=arguments,
+            with_logs=True,
+            on_queue_update=lambda update: print(f"  ⏳ Status: {getattr(update, 'status', 'processing')}")
+        )
+        
+        # 8. Guardar imágenes en Drive
+        images_saved = []
+        for i, img in enumerate(result.get('images', []), 1):
+            img_url = img.get('url')
+            if img_url:
+                img_response = requests.get(img_url)
+                if img_response.status_code == 200:
+                    filename = f"{codigo}_imagen_base_{i}.png" if i > 1 else f"{codigo}_imagen_base.png"
+                    file_id = sheets_service.save_image_to_drive(
+                        imagenes_folder_id,
+                        filename,
+                        img_response.content
+                    )
+                    images_saved.append({
+                        'filename': filename,
+                        'file_id': file_id,
+                        'url': img_url
+                    })
+                    print(f"💾 Guardada: {filename}")
+        
+        # 9. Actualizar checkbox en Sheet
+        sheets_service.update_post_field(codigo, 'imagen_base', True)
+        
+        # 10. Actualizar estado
+        sheets_service.update_post_state(codigo, 'IMAGE_BASE_AWAITING')
+        
+        print(f"✅ Generación completa exitosa")
+        
+        return jsonify({
+            'success': True,
+            'message': f'✅ Prompt e imágenes generadas correctamente',
+            'prompt': prompt,
+            'images': images_saved,
+            'references_used': len(reference_images)
+        })
+        
+    except Exception as e:
+        print(f"❌ Error en generación completa: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
@@ -3434,6 +3850,695 @@ def test_fal_generate():
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+
+# ============================================
+# ENDPOINTS PARA REDES SOCIALES (OAuth)
+# ============================================
+
+@app.route('/api/social/status', methods=['GET'])
+def get_social_status():
+    """
+    Obtener estado de todas las conexiones sociales
+    ---
+    tags:
+      - OAuth
+    responses:
+      200:
+        description: Estado de conexiones
+        schema:
+          type: object
+          properties:
+            instagram:
+              type: object
+            linkedin:
+              type: object
+            twitter:
+              type: object
+            facebook:
+              type: object
+            tiktok:
+              type: object
+    """
+    try:
+        # Leer tokens desde Google Sheets
+        tokens = sheets_service.get_social_tokens()
+        
+        platforms = ['instagram', 'linkedin', 'twitter', 'facebook', 'tiktok']
+        status = {}
+        
+        for platform in platforms:
+            if platform in tokens and tokens[platform]:
+                token_data = tokens[platform]
+                status[platform] = {
+                    'connected': True,
+                    'username': token_data.get('username', 'N/A'),
+                    'expires_at': token_data.get('expires_at'),
+                    'connected_at': token_data.get('connected_at'),
+                    'last_used': token_data.get('last_used')
+                }
+            else:
+                status[platform] = {
+                    'connected': False
+                }
+        
+        return jsonify(status)
+        
+    except Exception as e:
+        print(f"❌ Error obteniendo estado social: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/social/connect/<platform>', methods=['GET'])
+def connect_social_platform(platform):
+    """
+    Iniciar OAuth para conectar una plataforma
+    ---
+    tags:
+      - OAuth
+    parameters:
+      - name: platform
+        in: path
+        type: string
+        required: true
+        description: Plataforma a conectar (instagram, linkedin, twitter, facebook, tiktok)
+    responses:
+      302:
+        description: Redirect a OAuth
+    """
+    try:
+        # Configuración OAuth por plataforma
+        oauth_configs = {
+            'instagram': {
+                'client_id': os.getenv('INSTAGRAM_CLIENT_ID'),
+                'redirect_uri': f"{request.host_url}api/social/callback/instagram",
+                'scope': 'instagram_basic,instagram_content_publish',
+                'auth_url': 'https://api.instagram.com/oauth/authorize'
+            },
+            'linkedin': {
+                'client_id': os.getenv('LINKEDIN_CLIENT_ID'),
+                'redirect_uri': f"{request.host_url}api/social/callback/linkedin",
+                'scope': 'w_member_social,r_basicprofile',
+                'auth_url': 'https://www.linkedin.com/oauth/v2/authorization'
+            },
+            'twitter': {
+                'client_id': os.getenv('TWITTER_CLIENT_ID'),
+                'redirect_uri': f"{request.host_url}api/social/callback/twitter",
+                'scope': 'tweet.read,tweet.write,users.read',
+                'auth_url': 'https://twitter.com/i/oauth2/authorize'
+            },
+            'facebook': {
+                'client_id': os.getenv('FACEBOOK_CLIENT_ID'),
+                'redirect_uri': f"{request.host_url}api/social/callback/facebook",
+                'scope': 'pages_manage_posts,pages_read_engagement',
+                'auth_url': 'https://www.facebook.com/v18.0/dialog/oauth'
+            },
+            'tiktok': {
+                'client_id': os.getenv('TIKTOK_CLIENT_ID'),
+                'redirect_uri': f"{request.host_url}api/social/callback/tiktok",
+                'scope': 'video.upload,user.info.basic',
+                'auth_url': 'https://www.tiktok.com/auth/authorize/'
+            }
+        }
+        
+        if platform not in oauth_configs:
+            return jsonify({'error': 'Plataforma no soportada'}), 400
+        
+        config = oauth_configs[platform]
+        
+        # Verificar que exista client_id
+        if not config['client_id']:
+            return jsonify({
+                'error': f'Client ID no configurado para {platform}',
+                'message': f'Añade {platform.upper()}_CLIENT_ID al archivo .env'
+            }), 500
+        
+        # Generar state para seguridad
+        state = base64.urlsafe_b64encode(os.urandom(32)).decode('utf-8')
+        session[f'{platform}_oauth_state'] = state
+        
+        # Construir URL de autorización
+        auth_params = {
+            'client_id': config['client_id'],
+            'redirect_uri': config['redirect_uri'],
+            'scope': config['scope'],
+            'response_type': 'code',
+            'state': state
+        }
+        
+        auth_url = f"{config['auth_url']}?"
+        auth_url += '&'.join([f"{k}={v}" for k, v in auth_params.items()])
+        
+        print(f"🔗 Redirigiendo a OAuth de {platform}")
+        print(f"   URL: {auth_url}")
+        
+        return redirect(auth_url)
+        
+    except Exception as e:
+        print(f"❌ Error iniciando OAuth para {platform}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/social/callback/<platform>', methods=['GET'])
+def social_callback(platform):
+    """
+    Callback OAuth para recibir tokens
+    ---
+    tags:
+      - OAuth
+    parameters:
+      - name: platform
+        in: path
+        type: string
+        required: true
+      - name: code
+        in: query
+        type: string
+        required: true
+      - name: state
+        in: query
+        type: string
+        required: true
+    responses:
+      302:
+        description: Redirect a panel con resultado
+    """
+    try:
+        code = request.args.get('code')
+        state = request.args.get('state')
+        
+        # Verificar state
+        stored_state = session.get(f'{platform}_oauth_state')
+        if not stored_state or stored_state != state:
+            return jsonify({'error': 'Estado OAuth inválido'}), 400
+        
+        # Intercambiar code por access_token
+        token_data = exchange_code_for_token(platform, code)
+        
+        if not token_data:
+            return redirect(f"/panel/social_connect.html?error=token_exchange_failed&platform={platform}")
+        
+        # Guardar token en Google Sheets
+        sheets_service.save_social_token(platform, token_data)
+        
+        print(f"✅ Token de {platform} guardado correctamente")
+        
+        return redirect(f"/panel/social_connect.html?success=true&platform={platform}")
+        
+    except Exception as e:
+        print(f"❌ Error en callback de {platform}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return redirect(f"/panel/social_connect.html?error={str(e)}&platform={platform}")
+
+def exchange_code_for_token(platform, code):
+    """Intercambiar authorization code por access token"""
+    try:
+        token_endpoints = {
+            'instagram': 'https://api.instagram.com/oauth/access_token',
+            'linkedin': 'https://www.linkedin.com/oauth/v2/accessToken',
+            'twitter': 'https://api.twitter.com/2/oauth2/token',
+            'facebook': 'https://graph.facebook.com/v18.0/oauth/access_token',
+            'tiktok': 'https://open-api.tiktok.com/oauth/access_token/'
+        }
+        
+        client_secrets = {
+            'instagram': os.getenv('INSTAGRAM_CLIENT_SECRET'),
+            'linkedin': os.getenv('LINKEDIN_CLIENT_SECRET'),
+            'twitter': os.getenv('TWITTER_CLIENT_SECRET'),
+            'facebook': os.getenv('FACEBOOK_CLIENT_SECRET'),
+            'tiktok': os.getenv('TIKTOK_CLIENT_SECRET')
+        }
+        
+        client_ids = {
+            'instagram': os.getenv('INSTAGRAM_CLIENT_ID'),
+            'linkedin': os.getenv('LINKEDIN_CLIENT_ID'),
+            'twitter': os.getenv('TWITTER_CLIENT_ID'),
+            'facebook': os.getenv('FACEBOOK_CLIENT_ID'),
+            'tiktok': os.getenv('TIKTOK_CLIENT_ID')
+        }
+        
+        redirect_uri = f"{request.host_url}api/social/callback/{platform}"
+        
+        # Preparar request
+        data = {
+            'client_id': client_ids[platform],
+            'client_secret': client_secrets[platform],
+            'code': code,
+            'redirect_uri': redirect_uri,
+            'grant_type': 'authorization_code'
+        }
+        
+        response = requests.post(token_endpoints[platform], data=data)
+        
+        if response.status_code != 200:
+            print(f"❌ Error intercambiando token: {response.text}")
+            return None
+        
+        token_response = response.json()
+        
+        # Obtener info del usuario
+        user_info = get_user_info(platform, token_response['access_token'])
+        
+        return {
+            'access_token': token_response['access_token'],
+            'refresh_token': token_response.get('refresh_token'),
+            'expires_in': token_response.get('expires_in', 3600),
+            'username': user_info.get('username', 'N/A'),
+            'user_id': user_info.get('id')
+        }
+        
+    except Exception as e:
+        print(f"❌ Error intercambiando token: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+def get_user_info(platform, access_token):
+    """Obtener información del usuario"""
+    try:
+        user_endpoints = {
+            'instagram': 'https://graph.instagram.com/me?fields=id,username',
+            'linkedin': 'https://api.linkedin.com/v2/me',
+            'twitter': 'https://api.twitter.com/2/users/me',
+            'facebook': 'https://graph.facebook.com/me?fields=id,name',
+            'tiktok': 'https://open-api.tiktok.com/user/info/'
+        }
+        
+        headers = {'Authorization': f'Bearer {access_token}'}
+        response = requests.get(user_endpoints[platform], headers=headers)
+        
+        if response.status_code == 200:
+            return response.json()
+        
+        return {}
+        
+    except Exception as e:
+        print(f"❌ Error obteniendo info de usuario: {str(e)}")
+        return {}
+
+@app.route('/api/social/refresh/<platform>', methods=['POST'])
+def refresh_social_token(platform):
+    """
+    Renovar token de una plataforma
+    ---
+    tags:
+      - OAuth
+    parameters:
+      - name: platform
+        in: path
+        type: string
+        required: true
+    responses:
+      200:
+        description: Token renovado
+    """
+    try:
+        # Obtener refresh token actual
+        tokens = sheets_service.get_social_tokens()
+        
+        if platform not in tokens or not tokens[platform]:
+            return jsonify({'error': 'Plataforma no conectada'}), 400
+        
+        refresh_token = tokens[platform].get('refresh_token')
+        
+        if not refresh_token:
+            return jsonify({'error': 'No hay refresh token disponible'}), 400
+        
+        # Renovar token
+        new_token_data = refresh_access_token(platform, refresh_token)
+        
+        if not new_token_data:
+            return jsonify({'error': 'Error renovando token'}), 500
+        
+        # Actualizar en Sheets
+        sheets_service.save_social_token(platform, new_token_data)
+        
+        return jsonify({
+            'success': True,
+            'message': f'Token de {platform} renovado'
+        })
+        
+    except Exception as e:
+        print(f"❌ Error renovando token: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+def refresh_access_token(platform, refresh_token):
+    """Renovar access token usando refresh token"""
+    try:
+        token_endpoints = {
+            'instagram': 'https://graph.instagram.com/refresh_access_token',
+            'linkedin': 'https://www.linkedin.com/oauth/v2/accessToken',
+            'twitter': 'https://api.twitter.com/2/oauth2/token',
+            'facebook': 'https://graph.facebook.com/v18.0/oauth/access_token',
+            'tiktok': 'https://open-api.tiktok.com/oauth/refresh_token/'
+        }
+        
+        # Preparar request según plataforma
+        if platform == 'instagram':
+            params = {
+                'grant_type': 'ig_refresh_token',
+                'access_token': refresh_token
+            }
+            response = requests.get(token_endpoints[platform], params=params)
+        else:
+            data = {
+                'grant_type': 'refresh_token',
+                'refresh_token': refresh_token,
+                'client_id': os.getenv(f'{platform.upper()}_CLIENT_ID'),
+                'client_secret': os.getenv(f'{platform.upper()}_CLIENT_SECRET')
+            }
+            response = requests.post(token_endpoints[platform], data=data)
+        
+        if response.status_code != 200:
+            print(f"❌ Error renovando token: {response.text}")
+            return None
+        
+        token_response = response.json()
+        
+        return {
+            'access_token': token_response['access_token'],
+            'refresh_token': token_response.get('refresh_token', refresh_token),
+            'expires_in': token_response.get('expires_in', 3600)
+        }
+        
+    except Exception as e:
+        print(f"❌ Error renovando token: {str(e)}")
+        return None
+
+@app.route('/api/social/disconnect/<platform>', methods=['POST'])
+def disconnect_social_platform(platform):
+    """
+    Desconectar una plataforma
+    ---
+    tags:
+      - OAuth
+    parameters:
+      - name: platform
+        in: path
+        type: string
+        required: true
+    responses:
+      200:
+        description: Plataforma desconectada
+    """
+    try:
+        sheets_service.delete_social_token(platform)
+        
+        return jsonify({
+            'success': True,
+            'message': f'{platform} desconectado correctamente'
+        })
+        
+    except Exception as e:
+        print(f"❌ Error desconectando {platform}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/posts/<codigo>/publish', methods=['POST'])
+def publish_post(codigo):
+    """
+    Publicar post en múltiples redes sociales
+    ---
+    tags:
+      - OAuth
+    parameters:
+      - name: codigo
+        in: path
+        type: string
+        required: true
+        description: Código del post (YYYYMMDD-ref)
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          properties:
+            platforms:
+              type: array
+              items:
+                type: string
+              description: Lista de plataformas donde publicar
+              example: ["instagram", "linkedin", "twitter"]
+    responses:
+      200:
+        description: Publicación completada
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+            results:
+              type: object
+            errors:
+              type: object
+    """
+    try:
+        data = request.json
+        platforms = data.get('platforms', [])
+        
+        if not platforms:
+            return jsonify({'error': 'No se especificaron plataformas'}), 400
+        
+        # Obtener datos del post
+        post = sheets_service.get_post_by_codigo(codigo)
+        if not post:
+            return jsonify({'error': 'Post no encontrado'}), 404
+        
+        # Obtener tokens
+        tokens = sheets_service.get_social_tokens()
+        
+        results = {}
+        errors = {}
+        
+        for platform in platforms:
+            try:
+                if platform not in tokens or not tokens[platform]:
+                    errors[platform] = 'No conectado'
+                    continue
+                
+                # Publicar en la plataforma
+                result = publish_to_platform(platform, codigo, post, tokens[platform])
+                
+                if result['success']:
+                    results[platform] = result
+                    # Actualizar checkbox en Sheet
+                    sheets_service.update_post_field(codigo, f'published_{platform}', True)
+                else:
+                    errors[platform] = result.get('error', 'Error desconocido')
+                    
+            except Exception as e:
+                errors[platform] = str(e)
+                print(f"❌ Error publicando en {platform}: {str(e)}")
+        
+        # Si todas las plataformas se publicaron, cambiar estado a PUBLISHED
+        if len(results) == len(platforms) and len(errors) == 0:
+            sheets_service.update_post_field(codigo, 'estado', 'PUBLISHED')
+            sheets_service.update_post_field(codigo, 'fecha_real_publicacion', datetime.now().isoformat())
+        
+        return jsonify({
+            'success': len(errors) == 0,
+            'results': results,
+            'errors': errors,
+            'message': f'Publicado en {len(results)}/{len(platforms)} plataformas'
+        })
+        
+    except Exception as e:
+        print(f"❌ Error publicando post: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+def publish_to_platform(platform, codigo, post, token_data):
+    """Publicar contenido en una plataforma específica vía Zapier"""
+    try:
+        # Obtener contenido del post desde Drive
+        texto = sheets_service.get_file_content(codigo, f'{codigo}_{platform}.txt')
+        imagen_url = sheets_service.get_file_url(codigo, f'{codigo}_{platform}_16x9.png')
+        
+        if not texto or not imagen_url:
+            return {'success': False, 'error': 'Contenido o imagen no encontrados'}
+        
+        # Enviar a Zapier
+        zapier_url = os.getenv('ZAPIER_WEBHOOK_URL')
+        
+        if not zapier_url:
+            return {'success': False, 'error': 'ZAPIER_WEBHOOK_URL no configurada'}
+        
+        # Preparar payload para Zapier
+        payload = {
+            'platform': platform,
+            'user_id': token_data.get('user_id', 'default'),
+            'content': texto,
+            'image_url': imagen_url,
+            'post_codigo': codigo
+        }
+        
+        print(f"📤 Enviando a Zapier: {platform}")
+        print(f"   Content: {texto[:50]}...")
+        print(f"   Image: {imagen_url}")
+        
+        # Enviar webhook a Zapier
+        response = requests.post(zapier_url, json=payload, timeout=10)
+        
+        if response.status_code == 200:
+            print(f"✅ Zapier recibió el webhook para {platform}")
+            return {
+                'success': True,
+                'platform': platform,
+                'zapier_response': response.json()
+            }
+        else:
+            print(f"❌ Error en Zapier: {response.status_code}")
+            return {
+                'success': False,
+                'error': f'Zapier error: {response.status_code}'
+            }
+            
+    except Exception as e:
+        print(f"❌ Error publicando en {platform}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {'success': False, 'error': str(e)}
+
+def publish_to_instagram(access_token, caption, image_url, user_id):
+    """Publicar en Instagram"""
+    try:
+        # Instagram requiere 2 pasos: crear container, luego publicar
+        
+        # Paso 1: Crear media container
+        create_url = f'https://graph.instagram.com/v18.0/{user_id}/media'
+        create_data = {
+            'image_url': image_url,
+            'caption': caption,
+            'access_token': access_token
+        }
+        
+        response = requests.post(create_url, data=create_data)
+        if response.status_code != 200:
+            return {'success': False, 'error': response.text}
+        
+        container_id = response.json()['id']
+        
+        # Paso 2: Publicar
+        publish_url = f'https://graph.instagram.com/v18.0/{user_id}/media_publish'
+        publish_data = {
+            'creation_id': container_id,
+            'access_token': access_token
+        }
+        
+        response = requests.post(publish_url, data=publish_data)
+        if response.status_code != 200:
+            return {'success': False, 'error': response.text}
+        
+        return {'success': True, 'post_id': response.json()['id']}
+        
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+def publish_to_linkedin(access_token, text, image_url):
+    """Publicar en LinkedIn"""
+    try:
+        # LinkedIn API v2
+        url = 'https://api.linkedin.com/v2/ugcPosts'
+        
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json'
+        }
+        
+        # TODO: Implementar subida de imagen y creación de post
+        # Por ahora solo texto
+        
+        data = {
+            'author': 'urn:li:person:PERSON_ID',  # Obtener del token
+            'lifecycleState': 'PUBLISHED',
+            'specificContent': {
+                'com.linkedin.ugc.ShareContent': {
+                    'shareCommentary': {
+                        'text': text
+                    },
+                    'shareMediaCategory': 'NONE'
+                }
+            },
+            'visibility': {
+                'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC'
+            }
+        }
+        
+        response = requests.post(url, headers=headers, json=data)
+        
+        if response.status_code != 201:
+            return {'success': False, 'error': response.text}
+        
+        return {'success': True, 'post_id': response.json()['id']}
+        
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+def publish_to_twitter(access_token, text, image_url):
+    """Publicar en Twitter"""
+    try:
+        # Twitter API v2
+        url = 'https://api.twitter.com/2/tweets'
+        
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json'
+        }
+        
+        # TODO: Implementar subida de media
+        # Por ahora solo texto
+        
+        data = {
+            'text': text
+        }
+        
+        response = requests.post(url, headers=headers, json=data)
+        
+        if response.status_code != 201:
+            return {'success': False, 'error': response.text}
+        
+        return {'success': True, 'tweet_id': response.json()['data']['id']}
+        
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+def publish_to_facebook(access_token, message, image_url, page_id):
+    """Publicar en Facebook"""
+    try:
+        url = f'https://graph.facebook.com/v18.0/{page_id}/photos'
+        
+        data = {
+            'url': image_url,
+            'caption': message,
+            'access_token': access_token
+        }
+        
+        response = requests.post(url, data=data)
+        
+        if response.status_code != 200:
+            return {'success': False, 'error': response.text}
+        
+        return {'success': True, 'post_id': response.json()['id']}
+        
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+def publish_to_tiktok(access_token, description, video_url):
+    """Publicar en TikTok"""
+    try:
+        # TikTok API requiere proceso más complejo
+        # TODO: Implementar subida de video
+        
+        return {'success': False, 'error': 'TikTok publishing not implemented yet'}
+        
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)

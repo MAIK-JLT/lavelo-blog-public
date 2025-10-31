@@ -576,7 +576,13 @@ Claude: [Usa tool create_post]
 - **Claude 3.5 Sonnet (claude-3-5-sonnet-20241022):** Chat integrado, creación de posts, mejora de prompts
 - **Claude Haiku 4.5 (claude-haiku-4-5-20251001):** Textos adaptados y prompts (rápido y económico)
 - **Fal.ai SeaDream 4.0:** Generación de imágenes con referencias visuales
+  - **Sin referencias:** `fal-ai/bytedance/seedream/v4/text-to-image`
+  - **Con referencias (hasta 2):** `fal-ai/bytedance/seedream/v4/edit`
+  - Resolución: 1024x1024 (square_hd)
+  - 4 variaciones simultáneas
 - **Fal.ai SeeDance 1.0 Pro:** Generación de videos (Text-to-Video e Image-to-Video)
+  - **Text-to-Video:** `fal-ai/bytedance/seedance/v1/pro/text-to-video`
+  - **Image-to-Video:** `fal-ai/bytedance/seedance/v1/pro/image-to-video`
   - 720p: $0.30/video (económico)
   - 1024p: $0.74/video (alta calidad)
 

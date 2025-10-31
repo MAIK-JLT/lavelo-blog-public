@@ -6,17 +6,32 @@ Expone las funcionalidades del API Flask a IAs (Claude, Cursor, etc.)
 
 import asyncio
 import requests
+import sys
+import logging
 from typing import Optional
 from mcp.server.models import InitializationOptions
 from mcp.server import NotificationOptions, Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
+# Configurar logging a archivo
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('/tmp/mcp_server.log'),
+        logging.StreamHandler(sys.stderr)
+    ]
+)
+logger = logging.getLogger(__name__)
+
 # Configuración
 API_BASE_URL = "http://localhost:5001"
 
 # Crear servidor MCP
 server = Server("lavelo-blog")
+
+logger.info("🚀 MCP Server iniciado")
 
 # ============================================
 # TOOLS - Posts
@@ -27,34 +42,32 @@ async def handle_list_tools() -> list[Tool]:
     """Lista todas las herramientas disponibles"""
     return [
         Tool(
+            name="generate_complete_post",
+            description="🚀 HERRAMIENTA MAESTRA: Genera un post completo de principio a fin. Crea tema (si no se da), genera título y contenido profesional sobre triatlón, crea el post en Google Sheets + Drive, genera prompt de imagen optimizado, genera 4 variaciones de imagen con IA, y guarda todo. Es la forma más rápida de crear contenido de calidad.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "tema": {
+                        "type": "string",
+                        "description": "Tema del post (OPCIONAL). Si no se proporciona, se genera automáticamente un tema relevante sobre triatlón/ciclismo. Ejemplos: 'Nutrición en Ironman 70.3', 'Técnicas de escalada'"
+                    },
+                    "categoria": {
+                        "type": "string",
+                        "description": "Categoría del post",
+                        "enum": ["training", "racing", "training-science"],
+                        "default": "training"
+                    }
+                },
+                "required": []
+            }
+        ),
+        Tool(
             name="list_posts",
             description="Obtiene la lista de todos los posts del blog desde Google Sheets",
             inputSchema={
                 "type": "object",
                 "properties": {},
                 "required": []
-            }
-        ),
-        Tool(
-            name="create_post",
-            description="Crea un nuevo post en Google Sheets y Drive con su estructura de carpetas",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "titulo": {
-                        "type": "string",
-                        "description": "Título del post"
-                    },
-                    "contenido": {
-                        "type": "string",
-                        "description": "Contenido completo del texto base"
-                    },
-                    "categoria": {
-                        "type": "string",
-                        "description": "Categoría del post (training, racing, nutrition, etc.)"
-                    }
-                },
-                "required": ["titulo", "contenido"]
             }
         ),
         Tool(
@@ -182,6 +195,20 @@ async def handle_list_tools() -> list[Tool]:
                 },
                 "required": ["codigo"]
             }
+        ),
+        Tool(
+            name="generate_post_images_complete",
+            description="🚀 ENDPOINT COMPUESTO: Genera prompt + 4 imágenes automáticamente. Lee base.txt, genera prompt optimizado con Claude, genera 4 variaciones con Fal.ai y guarda todo en Drive. Ideal para flujo rápido.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "codigo": {
+                        "type": "string",
+                        "description": "Código del post"
+                    }
+                },
+                "required": ["codigo"]
+            }
         )
     ]
 
@@ -189,8 +216,37 @@ async def handle_list_tools() -> list[Tool]:
 async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
     """Ejecuta una herramienta"""
     
+    logger.info(f"📞 Llamada a herramienta: {name}")
+    logger.debug(f"   Argumentos: {arguments}")
+    
     try:
-        if name == "list_posts":
+        if name == "generate_complete_post":
+            logger.info("🚀 Generando post completo...")
+            response = requests.post(
+                f"{API_BASE_URL}/api/generate-complete-post",
+                json={
+                    "tema": arguments.get('tema'),
+                    "categoria": arguments.get('categoria', 'training')
+                },
+                timeout=120  # 2 minutos (genera contenido + imágenes)
+            )
+            result = response.json()
+            if result.get('success'):
+                return [TextContent(
+                    type="text",
+                    text=f"✅ {result.get('message')}\n\n" +
+                         f"📝 Código: {result.get('codigo')}\n" +
+                         f"📄 Título: {result.get('titulo')}\n" +
+                         f"📋 Preview: {result.get('contenido_preview')}\n\n" +
+                         f"🎨 Prompt: {result.get('prompt')[:100]}...\n" +
+                         f"🖼️  Imágenes: {result.get('images_count')}\n\n" +
+                         f"✨ Todo guardado en Google Sheets y Drive"
+                )]
+            else:
+                return [TextContent(type="text", text=f"❌ Error: {result.get('error')}")]
+        
+        elif name == "list_posts":
+            logger.info("📋 Listando posts...")
             response = requests.get(f"{API_BASE_URL}/api/posts")
             result = response.json()
             return [TextContent(
@@ -201,17 +257,28 @@ async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
             )]
         
         elif name == "create_post":
-            response = requests.post(
-                f"{API_BASE_URL}/api/chat",
-                json={
-                    "message": f"Crea un post con título '{arguments['titulo']}' y contenido: {arguments['contenido']}"
-                }
-            )
-            result = response.json()
-            return [TextContent(
-                type="text",
-                text=f"✅ Post creado exitosamente\n\n{result.get('response', '')}"
-            )]
+            logger.info(f"📝 Creando post: {arguments.get('titulo', 'Sin título')}")
+            try:
+                response = requests.post(
+                    f"{API_BASE_URL}/api/chat",
+                    json={
+                        "message": f"Crea un post con título '{arguments['titulo']}' y contenido: {arguments['contenido']}"
+                    },
+                    timeout=30
+                )
+                logger.info(f"   Status code: {response.status_code}")
+                result = response.json()
+                logger.info(f"   Respuesta: {str(result)[:200]}...")
+                return [TextContent(
+                    type="text",
+                    text=f"✅ Post creado exitosamente\n\n{result.get('response', '')}"
+                )]
+            except requests.exceptions.Timeout:
+                logger.error("⏱️  Timeout al crear post")
+                return [TextContent(type="text", text="❌ Error: Timeout al crear post (>30s)")]
+            except Exception as e:
+                logger.error(f"❌ Error creando post: {str(e)}")
+                return [TextContent(type="text", text=f"❌ Error: {str(e)}")]
         
         elif name == "get_post":
             response = requests.get(f"{API_BASE_URL}/api/posts")
@@ -325,10 +392,31 @@ async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
             else:
                 return [TextContent(type="text", text=f"❌ Error: {result.get('error')}")]
         
+        elif name == "generate_post_images_complete":
+            response = requests.post(
+                f"{API_BASE_URL}/api/generate-post-images-complete",
+                json={"codigo": arguments['codigo']}
+            )
+            result = response.json()
+            if result.get('success'):
+                return [TextContent(
+                    type="text",
+                    text=f"✅ {result.get('message')}\n\n" +
+                         f"📝 Prompt: {result.get('prompt')}\n\n" +
+                         f"🖼️  Imágenes generadas: {len(result.get('images', []))}\n" +
+                         f"📎 Referencias usadas: {result.get('references_used', 0)}\n\n" +
+                         "Archivos guardados en Drive:\n" +
+                         "\n".join([f"  • {img['filename']}" for img in result.get('images', [])])
+                )]
+            else:
+                return [TextContent(type="text", text=f"❌ Error: {result.get('error')}")]
+        
         else:
+            logger.warning(f"⚠️  Herramienta desconocida: {name}")
             return [TextContent(type="text", text=f"❌ Herramienta desconocida: {name}")]
     
     except Exception as e:
+        logger.error(f"❌ Error ejecutando {name}: {str(e)}", exc_info=True)
         return [TextContent(type="text", text=f"❌ Error ejecutando {name}: {str(e)}")]
 
 async def main():

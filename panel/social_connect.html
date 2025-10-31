@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conexiones Sociales - Lavelo Blog</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .social-container {
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 0.95rem;
+        }
+
+        .social-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .social-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .social-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .social-info {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .social-icon {
+            font-size: 2rem;
+        }
+
+        .social-name {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .status-connected {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .social-details {
+            margin-left: 56px;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .social-details p {
+            margin: 4px 0;
+        }
+
+        .social-actions {
+            margin-top: 16px;
+            margin-left: 56px;
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-connect {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-connect:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-refresh {
+            background: #17a2b8;
+            color: white;
+        }
+
+        .btn-refresh:hover {
+            background: #138496;
+        }
+
+        .btn-disconnect {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-disconnect:hover {
+            background: #c82333;
+        }
+
+        .btn-back {
+            background: #6c757d;
+            color: white;
+            margin-bottom: 20px;
+        }
+
+        .btn-back:hover {
+            background: #5a6268;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .bulk-actions {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .bulk-actions h3 {
+            margin-top: 0;
+            margin-bottom: 16px;
+            font-size: 1.1rem;
+            color: #333;
+        }
+
+        .bulk-actions-buttons {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .btn-bulk {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-bulk:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <div class="social-container">
+        <button class="btn btn-back" onclick="window.location.href='index.html'">
+            ← Volver al Panel
+        </button>
+
+        <div class="header">
+            <h1>🔗 Gestión de Conexiones Sociales</h1>
+            <p>Conecta tus redes sociales para publicar contenido automáticamente</p>
+        </div>
+
+        <div id="errorMessage" class="error-message"></div>
+        <div id="successMessage" class="success-message"></div>
+
+        <!-- Acciones en Bloque -->
+        <div class="bulk-actions">
+            <h3>⚡ Acciones Rápidas</h3>
+            <div class="bulk-actions-buttons">
+                <button class="btn btn-bulk" onclick="connectMultiple(['instagram', 'linkedin', 'twitter'])">
+                    Conectar Principales (Instagram, LinkedIn, Twitter)
+                </button>
+                <button class="btn btn-bulk" onclick="connectMultiple(['instagram', 'linkedin', 'twitter', 'facebook', 'tiktok'])">
+                    Conectar Todas
+                </button>
+                <button class="btn btn-refresh" onclick="refreshAllTokens()">
+                    🔄 Renovar Todas las Conexiones
+                </button>
+            </div>
+        </div>
+
+        <div id="loadingState" class="loading">
+            <div class="spinner"></div>
+            <p>Cargando estado de conexiones...</p>
+        </div>
+
+        <div id="socialCards" style="display: none;">
+            <!-- Instagram -->
+            <div class="social-card" id="card-instagram">
+                <div class="social-header">
+                    <div class="social-info">
+                        <span class="social-icon">📱</span>
+                        <span class="social-name">Instagram</span>
+                    </div>
+                    <span class="status-badge" id="status-instagram">❌ No conectado</span>
+                </div>
+                <div class="social-details" id="details-instagram">
+                    <p>Conecta tu cuenta de Instagram para publicar imágenes y videos.</p>
+                </div>
+                <div class="social-actions" id="actions-instagram">
+                    <button class="btn btn-connect" onclick="connectPlatform('instagram')">
+                        🔗 Conectar Instagram
+                    </button>
+                </div>
+            </div>
+
+            <!-- LinkedIn -->
+            <div class="social-card" id="card-linkedin">
+                <div class="social-header">
+                    <div class="social-info">
+                        <span class="social-icon">💼</span>
+                        <span class="social-name">LinkedIn</span>
+                    </div>
+                    <span class="status-badge" id="status-linkedin">❌ No conectado</span>
+                </div>
+                <div class="social-details" id="details-linkedin">
+                    <p>Conecta tu perfil de LinkedIn para compartir contenido profesional.</p>
+                </div>
+                <div class="social-actions" id="actions-linkedin">
+                    <button class="btn btn-connect" onclick="connectPlatform('linkedin')">
+                        🔗 Conectar LinkedIn
+                    </button>
+                </div>
+            </div>
+
+            <!-- Twitter/X -->
+            <div class="social-card" id="card-twitter">
+                <div class="social-header">
+                    <div class="social-info">
+                        <span class="social-icon">🐦</span>
+                        <span class="social-name">Twitter / X</span>
+                    </div>
+                    <span class="status-badge" id="status-twitter">❌ No conectado</span>
+                </div>
+                <div class="social-details" id="details-twitter">
+                    <p>Conecta tu cuenta de Twitter/X para publicar tweets con imágenes.</p>
+                </div>
+                <div class="social-actions" id="actions-twitter">
+                    <button class="btn btn-connect" onclick="connectPlatform('twitter')">
+                        🔗 Conectar Twitter
+                    </button>
+                </div>
+            </div>
+
+            <!-- Facebook -->
+            <div class="social-card" id="card-facebook">
+                <div class="social-header">
+                    <div class="social-info">
+                        <span class="social-icon">📘</span>
+                        <span class="social-name">Facebook</span>
+                    </div>
+                    <span class="status-badge" id="status-facebook">❌ No conectado</span>
+                </div>
+                <div class="social-details" id="details-facebook">
+                    <p>Conecta tu página de Facebook para publicar contenido.</p>
+                </div>
+                <div class="social-actions" id="actions-facebook">
+                    <button class="btn btn-connect" onclick="connectPlatform('facebook')">
+                        🔗 Conectar Facebook
+                    </button>
+                </div>
+            </div>
+
+            <!-- TikTok -->
+            <div class="social-card" id="card-tiktok">
+                <div class="social-header">
+                    <div class="social-info">
+                        <span class="social-icon">🎵</span>
+                        <span class="social-name">TikTok</span>
+                    </div>
+                    <span class="status-badge" id="status-tiktok">❌ No conectado</span>
+                </div>
+                <div class="social-details" id="details-tiktok">
+                    <p>Conecta tu cuenta de TikTok para publicar videos cortos.</p>
+                </div>
+                <div class="social-actions" id="actions-tiktok">
+                    <button class="btn btn-connect" onclick="connectPlatform('tiktok')">
+                        🔗 Conectar TikTok
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+
+        // Cargar estado al iniciar
+        document.addEventListener('DOMContentLoaded', () => {
+            loadConnectionStatus();
+        });
+
+        // Cargar estado de todas las conexiones
+        async function loadConnectionStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/api/social/status`);
+                const data = await response.json();
+
+                if (data.error) {
+                    showError(data.error);
+                    document.getElementById('loadingState').style.display = 'none';
+                    document.getElementById('socialCards').style.display = 'block';
+                    return;
+                }
+
+                // Actualizar UI para cada plataforma
+                const platforms = ['instagram', 'linkedin', 'twitter', 'facebook', 'tiktok'];
+                platforms.forEach(platform => {
+                    updatePlatformUI(platform, data[platform]);
+                });
+
+                document.getElementById('loadingState').style.display = 'none';
+                document.getElementById('socialCards').style.display = 'block';
+            } catch (error) {
+                console.error('Error cargando estado:', error);
+                showError('Error al cargar el estado de las conexiones');
+                document.getElementById('loadingState').style.display = 'none';
+                document.getElementById('socialCards').style.display = 'block';
+            }
+        }
+
+        // Actualizar UI de una plataforma
+        function updatePlatformUI(platform, data) {
+            const statusBadge = document.getElementById(`status-${platform}`);
+            const details = document.getElementById(`details-${platform}`);
+            const actions = document.getElementById(`actions-${platform}`);
+
+            if (data && data.connected) {
+                // Conectado
+                statusBadge.className = 'status-badge status-connected';
+                statusBadge.textContent = '✅ Conectado';
+
+                details.innerHTML = `
+                    <p><strong>Usuario:</strong> ${data.username || 'N/A'}</p>
+                    <p><strong>Conectado:</strong> ${formatDate(data.connected_at)}</p>
+                    <p><strong>Expira:</strong> ${formatDate(data.expires_at)}</p>
+                    ${data.last_used ? `<p><strong>Último uso:</strong> ${formatDate(data.last_used)}</p>` : ''}
+                `;
+
+                actions.innerHTML = `
+                    <button class="btn btn-refresh" onclick="refreshToken('${platform}')">
+                        🔄 Renovar
+                    </button>
+                    <button class="btn btn-disconnect" onclick="disconnectPlatform('${platform}')">
+                        ❌ Desconectar
+                    </button>
+                `;
+            } else {
+                // No conectado
+                statusBadge.className = 'status-badge status-disconnected';
+                statusBadge.textContent = '❌ No conectado';
+
+                const descriptions = {
+                    instagram: 'Conecta tu cuenta de Instagram para publicar imágenes y videos.',
+                    linkedin: 'Conecta tu perfil de LinkedIn para compartir contenido profesional.',
+                    twitter: 'Conecta tu cuenta de Twitter/X para publicar tweets con imágenes.',
+                    facebook: 'Conecta tu página de Facebook para publicar contenido.',
+                    tiktok: 'Conecta tu cuenta de TikTok para publicar videos cortos.'
+                };
+
+                details.innerHTML = `<p>${descriptions[platform]}</p>`;
+
+                actions.innerHTML = `
+                    <button class="btn btn-connect" onclick="connectPlatform('${platform}')">
+                        🔗 Conectar ${platform.charAt(0).toUpperCase() + platform.slice(1)}
+                    </button>
+                `;
+            }
+        }
+
+        // Conectar una plataforma
+        async function connectPlatform(platform) {
+            try {
+                showSuccess(`Redirigiendo a ${platform}...`);
+                // Redirigir a OAuth
+                window.location.href = `${API_BASE}/api/social/connect/${platform}`;
+            } catch (error) {
+                console.error('Error conectando:', error);
+                showError(`Error al conectar con ${platform}`);
+            }
+        }
+
+        // Conectar múltiples plataformas
+        async function connectMultiple(platforms) {
+            if (confirm(`¿Deseas conectar ${platforms.length} redes sociales?\n\n${platforms.join(', ')}\n\nSe abrirán ventanas de autorización para cada una.`)) {
+                for (const platform of platforms) {
+                    await connectPlatform(platform);
+                    // Esperar un poco entre conexiones
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+        }
+
+        // Renovar token
+        async function refreshToken(platform) {
+            try {
+                const response = await fetch(`${API_BASE}/api/social/refresh/${platform}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    showSuccess(`Token de ${platform} renovado correctamente`);
+                    loadConnectionStatus();
+                } else {
+                    showError(data.error || `Error al renovar token de ${platform}`);
+                }
+            } catch (error) {
+                console.error('Error renovando token:', error);
+                showError(`Error al renovar token de ${platform}`);
+            }
+        }
+
+        // Renovar todos los tokens
+        async function refreshAllTokens() {
+            if (!confirm('¿Deseas renovar todas las conexiones activas?')) return;
+
+            const platforms = ['instagram', 'linkedin', 'twitter', 'facebook', 'tiktok'];
+            let successCount = 0;
+            let errorCount = 0;
+
+            for (const platform of platforms) {
+                try {
+                    const response = await fetch(`${API_BASE}/api/social/refresh/${platform}`, {
+                        method: 'POST'
+                    });
+                    const data = await response.json();
+
+                    if (data.success) {
+                        successCount++;
+                    } else {
+                        errorCount++;
+                    }
+                } catch (error) {
+                    errorCount++;
+                }
+            }
+
+            if (successCount > 0) {
+                showSuccess(`${successCount} conexiones renovadas correctamente`);
+            }
+            if (errorCount > 0) {
+                showError(`${errorCount} conexiones no pudieron renovarse`);
+            }
+
+            loadConnectionStatus();
+        }
+
+        // Desconectar plataforma
+        async function disconnectPlatform(platform) {
+            if (!confirm(`¿Estás seguro de desconectar ${platform}?`)) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/social/disconnect/${platform}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    showSuccess(`${platform} desconectado correctamente`);
+                    loadConnectionStatus();
+                } else {
+                    showError(data.error || `Error al desconectar ${platform}`);
+                }
+            } catch (error) {
+                console.error('Error desconectando:', error);
+                showError(`Error al desconectar ${platform}`);
+            }
+        }
+
+        // Formatear fecha
+        function formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('es-ES', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        // Mostrar error
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        // Mostrar éxito
+        function showSuccess(message) {
+            const successDiv = document.getElementById('successMessage');
+            successDiv.textContent = message;
+            successDiv.style.display = 'block';
+            setTimeout(() => {
+                successDiv.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

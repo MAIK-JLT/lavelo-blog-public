@@ -78,6 +78,18 @@ class SheetsService:
         """Asegurar que los servicios estén autenticados, reinicializando si es necesario"""
         if self.drive_service is None or self.service is None:
             print("🔄 Reinicializando servicios de Google...")
+            # Forzar recarga del token
+            if os.path.exists(self.token_path):
+                try:
+                    self.creds = Credentials.from_authorized_user_file(self.token_path, SCOPES)
+                    if self.creds and self.creds.valid:
+                        self.service = build('sheets', 'v4', credentials=self.creds)
+                        self.drive_service = build('drive', 'v3', credentials=self.creds)
+                        print("✅ Servicios reconstruidos exitosamente")
+                        return True
+                except Exception as e:
+                    print(f"❌ Error reconstruyendo servicios: {e}")
+                    return False
             return self.authenticate()
         return True
     
@@ -716,6 +728,269 @@ class SheetsService:
         except Exception as e:
             print(f"❌ Error leyendo imagen {filename}: {str(e)}")
             return None
+    
+    def get_social_tokens(self):
+        """Obtener todos los tokens de redes sociales desde Google Sheets"""
+        try:
+            from datetime import datetime
+            from cryptography.fernet import Fernet
+            
+            # Leer hoja social_tokens
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=SPREADSHEET_ID,
+                range='social_tokens!A2:G100'  # Desde fila 2 (sin headers)
+            ).execute()
+            
+            rows = result.get('values', [])
+            
+            if not rows:
+                print("ℹ️ No hay tokens guardados")
+                return {}
+            
+            # Obtener clave de encriptación
+            encryption_key = os.getenv('ENCRYPTION_KEY')
+            if not encryption_key:
+                print("⚠️ ENCRYPTION_KEY no configurada, tokens sin encriptar")
+                cipher = None
+            else:
+                cipher = Fernet(encryption_key.encode())
+            
+            tokens = {}
+            for row in rows:
+                if len(row) < 4:
+                    continue
+                
+                platform = row[0]
+                access_token_encrypted = row[1]
+                refresh_token_encrypted = row[2] if len(row) > 2 else None
+                expires_at = row[3] if len(row) > 3 else None
+                username = row[4] if len(row) > 4 else 'N/A'
+                connected_at = row[5] if len(row) > 5 else None
+                last_used = row[6] if len(row) > 6 else None
+                
+                # Desencriptar tokens
+                if cipher:
+                    try:
+                        access_token = cipher.decrypt(access_token_encrypted.encode()).decode()
+                        refresh_token = cipher.decrypt(refresh_token_encrypted.encode()).decode() if refresh_token_encrypted else None
+                    except:
+                        print(f"⚠️ Error desencriptando token de {platform}")
+                        continue
+                else:
+                    access_token = access_token_encrypted
+                    refresh_token = refresh_token_encrypted
+                
+                tokens[platform] = {
+                    'access_token': access_token,
+                    'refresh_token': refresh_token,
+                    'expires_at': expires_at,
+                    'username': username,
+                    'connected_at': connected_at,
+                    'last_used': last_used
+                }
+            
+            print(f"✅ Tokens cargados: {list(tokens.keys())}")
+            return tokens
+            
+        except Exception as e:
+            print(f"❌ Error obteniendo tokens: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return {}
+    
+    def save_social_token(self, platform, token_data):
+        """Guardar o actualizar token de una plataforma"""
+        try:
+            from datetime import datetime, timedelta
+            from cryptography.fernet import Fernet
+            
+            # Obtener clave de encriptación
+            encryption_key = os.getenv('ENCRYPTION_KEY')
+            if not encryption_key:
+                print("⚠️ ENCRYPTION_KEY no configurada, generando una nueva")
+                encryption_key = Fernet.generate_key().decode()
+                print(f"🔑 Añade esto a tu .env: ENCRYPTION_KEY={encryption_key}")
+                cipher = Fernet(encryption_key.encode())
+            else:
+                cipher = Fernet(encryption_key.encode())
+            
+            # Encriptar tokens
+            access_token_encrypted = cipher.encrypt(token_data['access_token'].encode()).decode()
+            refresh_token_encrypted = cipher.encrypt(token_data.get('refresh_token', '').encode()).decode() if token_data.get('refresh_token') else ''
+            
+            # Calcular expires_at
+            expires_in = token_data.get('expires_in', 3600)
+            expires_at = (datetime.now() + timedelta(seconds=expires_in)).isoformat()
+            
+            connected_at = datetime.now().isoformat()
+            username = token_data.get('username', 'N/A')
+            
+            # Buscar si ya existe el token
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=SPREADSHEET_ID,
+                range='social_tokens!A2:A100'
+            ).execute()
+            
+            rows = result.get('values', [])
+            row_index = None
+            
+            for idx, row in enumerate(rows):
+                if row and row[0] == platform:
+                    row_index = idx + 2  # +2 porque empezamos en A2
+                    break
+            
+            # Preparar datos
+            values = [[
+                platform,
+                access_token_encrypted,
+                refresh_token_encrypted,
+                expires_at,
+                username,
+                connected_at,
+                ''  # last_used (vacío por ahora)
+            ]]
+            
+            if row_index:
+                # Actualizar fila existente
+                range_name = f'social_tokens!A{row_index}:G{row_index}'
+                self.service.spreadsheets().values().update(
+                    spreadsheetId=SPREADSHEET_ID,
+                    range=range_name,
+                    valueInputOption='RAW',
+                    body={'values': values}
+                ).execute()
+                print(f"✅ Token de {platform} actualizado")
+            else:
+                # Añadir nueva fila
+                self.service.spreadsheets().values().append(
+                    spreadsheetId=SPREADSHEET_ID,
+                    range='social_tokens!A2:G2',
+                    valueInputOption='RAW',
+                    insertDataOption='INSERT_ROWS',
+                    body={'values': values}
+                ).execute()
+                print(f"✅ Token de {platform} guardado")
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error guardando token: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return False
+    
+    def delete_social_token(self, platform):
+        """Eliminar token de una plataforma"""
+        try:
+            # Buscar fila del token
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=SPREADSHEET_ID,
+                range='social_tokens!A2:A100'
+            ).execute()
+            
+            rows = result.get('values', [])
+            row_index = None
+            
+            for idx, row in enumerate(rows):
+                if row and row[0] == platform:
+                    row_index = idx + 2  # +2 porque empezamos en A2
+                    break
+            
+            if not row_index:
+                print(f"ℹ️ Token de {platform} no encontrado")
+                return True
+            
+            # Limpiar la fila (poner valores vacíos)
+            values = [['', '', '', '', '', '', '']]
+            range_name = f'social_tokens!A{row_index}:G{row_index}'
+            
+            self.service.spreadsheets().values().update(
+                spreadsheetId=SPREADSHEET_ID,
+                range=range_name,
+                valueInputOption='RAW',
+                body={'values': values}
+            ).execute()
+            
+            print(f"✅ Token de {platform} eliminado")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error eliminando token: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return False
+    
+    def get_post_by_codigo(self, codigo):
+        """Obtener datos de un post por su código"""
+        try:
+            posts = self.get_all_posts()
+            for post in posts:
+                if post.get('codigo') == codigo:
+                    return post
+            return None
+        except Exception as e:
+            print(f"❌ Error obteniendo post {codigo}: {str(e)}")
+            return None
+    
+    def update_post_field(self, codigo, field, value):
+        """Actualizar un campo específico de un post"""
+        try:
+            # Mapeo de campos a columnas
+            field_columns = {
+                'estado': 'F',
+                'fecha_real_publicacion': 'AH',
+                'published_instagram': 'AC',
+                'published_linkedin': 'AD',
+                'published_twitter': 'AE',
+                'published_facebook': 'AF',
+                'published_tiktok': 'AG'
+            }
+            
+            if field not in field_columns:
+                print(f"⚠️ Campo {field} no reconocido")
+                return False
+            
+            # Buscar fila del post
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=SPREADSHEET_ID,
+                range='Posts!C2:C1000'  # Columna de códigos
+            ).execute()
+            
+            rows = result.get('values', [])
+            row_index = None
+            
+            for idx, row in enumerate(rows):
+                if row and row[0] == codigo:
+                    row_index = idx + 2  # +2 porque empezamos en C2
+                    break
+            
+            if not row_index:
+                print(f"❌ Post {codigo} no encontrado")
+                return False
+            
+            # Actualizar campo
+            column = field_columns[field]
+            range_name = f'Posts!{column}{row_index}'
+            
+            # Convertir booleanos a checkboxes
+            if isinstance(value, bool):
+                value = 'TRUE' if value else 'FALSE'
+            
+            self.service.spreadsheets().values().update(
+                spreadsheetId=SPREADSHEET_ID,
+                range=range_name,
+                valueInputOption='RAW',
+                body={'values': [[value]]}
+            ).execute()
+            
+            print(f"✅ Campo {field} actualizado para {codigo}")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Error actualizando campo: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return False
 
 # Instancia global
 sheets_service = SheetsService()
