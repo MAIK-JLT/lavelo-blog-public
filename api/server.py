@@ -3896,6 +3896,17 @@ def get_social_status():
                     'connected_at': token_data.get('connected_at'),
                     'last_used': token_data.get('last_used')
                 }
+            # Si Instagram está conectado, Facebook también lo está (mismo token)
+            elif platform == 'facebook' and 'instagram' in tokens and tokens['instagram']:
+                token_data = tokens['instagram']
+                status[platform] = {
+                    'connected': True,
+                    'username': token_data.get('username', 'N/A'),
+                    'expires_at': token_data.get('expires_at'),
+                    'connected_at': token_data.get('connected_at'),
+                    'last_used': token_data.get('last_used'),
+                    'shared_with_instagram': True
+                }
             else:
                 status[platform] = {
                     'connected': False
@@ -3932,8 +3943,8 @@ def connect_social_platform(platform):
             'instagram': {
                 'client_id': os.getenv('INSTAGRAM_CLIENT_ID'),
                 'redirect_uri': f"{request.host_url}api/social/callback/instagram",
-                'scope': 'instagram_basic,instagram_content_publish',
-                'auth_url': 'https://api.instagram.com/oauth/authorize'
+                'scope': 'instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement,pages_manage_posts',
+                'auth_url': 'https://www.facebook.com/v21.0/dialog/oauth'
             },
             'linkedin': {
                 'client_id': os.getenv('LINKEDIN_CLIENT_ID'),
@@ -4056,7 +4067,7 @@ def exchange_code_for_token(platform, code):
     """Intercambiar authorization code por access token"""
     try:
         token_endpoints = {
-            'instagram': 'https://api.instagram.com/oauth/access_token',
+            'instagram': 'https://graph.facebook.com/v21.0/oauth/access_token',
             'linkedin': 'https://www.linkedin.com/oauth/v2/accessToken',
             'twitter': 'https://api.twitter.com/2/oauth2/token',
             'facebook': 'https://graph.facebook.com/v18.0/oauth/access_token',
