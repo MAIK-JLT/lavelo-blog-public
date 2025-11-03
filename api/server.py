@@ -12,6 +12,7 @@ env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
 load_dotenv(dotenv_path=env_path)
 
 from sheets_service import sheets_service
+import db_service
 from anthropic import Anthropic
 from openai import OpenAI
 from google import genai
@@ -222,7 +223,7 @@ def get_posts():
         description: Error del servidor
     """
     try:
-        posts = sheets_service.get_posts()
+        posts = db_service.get_all_posts()
         return jsonify({'success': True, 'posts': posts})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -1855,21 +1856,15 @@ def format_videos():
 # API: Actualizar campo de post
 @app.route('/api/posts/<codigo>/update', methods=['POST'])
 def update_post(codigo):
-    if 'credentials' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
-    sheets_service.authenticate(session['credentials'])
-    
-    data = request.json
-    field = data.get('field')
-    value = data.get('value')
-    
-    success = sheets_service.update_post_field(codigo, field, value)
-    
-    if success:
-        return jsonify({'success': True, 'message': f'{field} actualizado'})
-    
-    return jsonify({'success': False, 'message': 'Error al actualizar'}), 500
+    try:
+        data = request.json
+        
+        # Actualizar en MySQL
+        updated_post = db_service.update_post(codigo, data)
+        
+        return jsonify({'success': True, 'message': 'Post actualizado', 'post': updated_post})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 # API: Publicar
 @app.route('/api/publish', methods=['POST'])
@@ -1909,9 +1904,8 @@ def delete_post(codigo):
     try:
         print(f"🗑️ Eliminando post {codigo}...")
         
-        # 1. Obtener post para tener el Drive Folder ID
-        posts = sheets_service.get_posts()
-        post = next((p for p in posts if p['codigo'] == codigo), None)
+        # 1. Obtener post de MySQL
+        post = db_service.get_post_by_codigo(codigo)
         
         if not post:
             return jsonify({'error': f'Post {codigo} no encontrado'}), 404
@@ -1924,43 +1918,9 @@ def delete_post(codigo):
             except Exception as e:
                 print(f"  ⚠️ Error eliminando carpeta de Drive: {e}")
         
-        # 3. Eliminar fila de Sheet
-        # Buscar fila del post
-        SPREADSHEET_ID = os.getenv('GOOGLE_SHEETS_ID')
-        result = sheets_service.service.spreadsheets().values().get(
-            spreadsheetId=SPREADSHEET_ID,
-            range='Sheet1!C2:C'
-        ).execute()
-        
-        rows = result.get('values', [])
-        row_index = None
-        
-        for i, row in enumerate(rows):
-            if row and row[0] == codigo:
-                row_index = i + 2  # +2 porque empezamos en fila 2
-                break
-        
-        if row_index:
-            # Eliminar fila
-            request_body = {
-                'requests': [{
-                    'deleteDimension': {
-                        'range': {
-                            'sheetId': 0,  # Asumiendo que es la primera hoja
-                            'dimension': 'ROWS',
-                            'startIndex': row_index - 1,
-                            'endIndex': row_index
-                        }
-                    }
-                }]
-            }
-            
-            sheets_service.service.spreadsheets().batchUpdate(
-                spreadsheetId=SPREADSHEET_ID,
-                body=request_body
-            ).execute()
-            
-            print(f"  ✅ Fila {row_index} eliminada de Sheet")
+        # 3. Eliminar de MySQL
+        db_service.delete_post(codigo)
+        print(f"  ✅ Post {codigo} eliminado de MySQL")
         
         return jsonify({
             'success': True,
