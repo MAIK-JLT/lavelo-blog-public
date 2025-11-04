@@ -764,7 +764,7 @@ Genera un prompt conciso (máx 500 caracteres) en ESPAÑOL que use las referenci
                 }
                 
                 const posts = data.posts || [];
-                const postsWithBase = posts.filter(p => p.base_text === 'TRUE');
+                const postsWithBase = posts.filter(p => p.base_txt === true || p.base_txt === 'TRUE');
                 
                 const selector = document.getElementById('postSelector');
                 

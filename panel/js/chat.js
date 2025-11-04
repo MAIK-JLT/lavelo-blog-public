@@ -28,23 +28,36 @@ async function sendChatMessage() {
     showChatLoading();
     
     try {
+        // Timeout de 120 segundos para respuestas largas
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 120000);
+        
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 message: message,
                 history: chatHistory
-            })
+            }),
+            signal: controller.signal
         });
         
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
+        console.log('Chat response:', data);
         
         // Ocultar loading
         hideChatLoading();
         
         if (data.success) {
             // Añadir respuesta del asistente
-            addMessage('assistant', data.message);
+            const assistantMessage = data.response || data.message;
+            addMessage('assistant', assistantMessage);
             
             // Actualizar historial
             chatHistory.push({
@@ -53,7 +66,7 @@ async function sendChatMessage() {
             });
             chatHistory.push({
                 role: 'assistant',
-                content: data.message
+                content: assistantMessage
             });
             
             // Si se usó una herramienta, recargar según el tipo
@@ -94,13 +107,50 @@ function addMessage(role, content) {
     
     const bubble = document.createElement('div');
     bubble.className = 'message-bubble';
-    bubble.textContent = content;
+    
+    // Renderizar Markdown a HTML
+    bubble.innerHTML = formatMarkdown(content);
     
     messageDiv.appendChild(bubble);
     messagesContainer.appendChild(messageDiv);
     
     // Scroll al final
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+function formatMarkdown(text) {
+    if (!text) return '';
+    
+    // Escapar HTML para seguridad
+    text = text.replace(/&/g, '&amp;')
+               .replace(/</g, '&lt;')
+               .replace(/>/g, '&gt;');
+    
+    // Convertir Markdown a HTML
+    return text
+        // Headers (deben ir antes de otros reemplazos)
+        .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+        .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+        .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+        // Bold y cursiva
+        .replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        // Listas
+        .replace(/^\- (.*$)/gim, '<li>$1</li>')
+        .replace(/^(\d+)\. (.*$)/gim, '<li>$2</li>')
+        // Code blocks
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        // Links
+        .replace(/\[([^\]]+)\]\(([^\)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+        // Saltos de línea (dobles para párrafos, simples para <br>)
+        .replace(/\n\n/g, '</p><p>')
+        .replace(/\n/g, '<br>')
+        // Envolver en párrafo
+        .replace(/^(.+)$/gim, '<p>$1</p>')
+        // Limpiar párrafos vacíos
+        .replace(/<p><\/p>/g, '')
+        .replace(/<p><br><\/p>/g, '<br>');
 }
 
 function showChatLoading() {

@@ -131,6 +131,64 @@
     color: #333;
 }
 
+/* Estilos para contenido Markdown en el chat */
+.message-bubble h1 {
+    font-size: 1.4em;
+    font-weight: bold;
+    margin: 12px 0 8px 0;
+    color: #333;
+}
+
+.message-bubble h2 {
+    font-size: 1.2em;
+    font-weight: bold;
+    margin: 10px 0 6px 0;
+    color: #444;
+}
+
+.message-bubble h3 {
+    font-size: 1.1em;
+    font-weight: bold;
+    margin: 8px 0 4px 0;
+    color: #555;
+}
+
+.message-bubble p {
+    margin: 6px 0;
+    line-height: 1.5;
+}
+
+.message-bubble strong {
+    font-weight: bold;
+    color: #222;
+}
+
+.message-bubble em {
+    font-style: italic;
+}
+
+.message-bubble code {
+    background: rgba(0, 0, 0, 0.05);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+}
+
+.message-bubble li {
+    margin: 4px 0 4px 20px;
+    line-height: 1.4;
+}
+
+.message-bubble a {
+    color: #667eea;
+    text-decoration: none;
+}
+
+.message-bubble a:hover {
+    text-decoration: underline;
+}
+
 .chat-input-container {
     padding: 15px;
     border-top: 1px solid #eee;

@@ -1,19 +1,29 @@
 """
-Conexión a base de datos MySQL
+Configuración de base de datos con SQLAlchemy
+Usa SQLite en local y MySQL en producción
 """
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
-import os
 from dotenv import load_dotenv
+import os
 
 # Cargar variables de entorno
-load_dotenv()  # Busca .env en el directorio actual (/api)
+env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+load_dotenv(dotenv_path=env_path)
 
-# Obtener URL de base de datos
-DATABASE_URL = os.getenv('DATABASE_URL')
+# Detectar entorno
+IS_PRODUCTION = os.getenv('ENVIRONMENT', 'development') == 'production'
 
-if not DATABASE_URL:
-    raise ValueError("DATABASE_URL no está configurada en .env")
+if IS_PRODUCTION:
+    # Producción: MySQL
+    DATABASE_URL = os.getenv('DATABASE_URL')
+    if not DATABASE_URL:
+        raise ValueError("DATABASE_URL no está configurada en .env")
+else:
+    # Local: SQLite
+    db_path = os.path.join(os.path.dirname(__file__), 'lavelo_blog.db')
+    DATABASE_URL = f'sqlite:///{db_path}'
+    print(f" Usando SQLite local: {db_path}")
 
 # Crear engine
 engine = create_engine(
@@ -44,6 +54,6 @@ def init_db():
     """
     Inicializa la base de datos (crea tablas)
     """
-    from models import Base
+    from db_models import Base
     Base.metadata.create_all(bind=engine)
     print("✅ Tablas creadas en MySQL")

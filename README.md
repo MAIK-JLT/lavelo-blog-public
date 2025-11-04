@@ -15,42 +15,53 @@ Sistema automatizado end-to-end para crear y publicar contenido semanal de triat
 - **Repo GitHub:** https://github.com/MAIK-JLT/lavelo-blog-public
 - **Producción blog:** https://blog.lavelo.es
 - **Panel de control:** https://blog.lavelo.es/panel/
-- **API Docs (Swagger):** http://localhost:5001/api/docs
+- **API Docs (Swagger):** http://localhost:5001/docs
+- **Services Docs (pdoc):** http://localhost:8080
 
 ### 2. ARQUITECTURA DE SERVICIOS
 
 ```
-┌─────────────────────────────────────┐
-│         FRONTENDS                   │
-├─────────────────────────────────────┤
-│  • Navegador Web                    │
-│  • Claude Desktop (MCP)             │
-│  • Cursor/Windsurf                  │
-└──────────┬──────────────────────────┘
-           │
-           ▼
-┌─────────────────────────────────────┐
-│   MCP SERVER (mcp_server.py)        │
-│   Protocolo: MCP (stdio)            │
-│   Wrapper sobre Flask API           │
-└──────────┬──────────────────────────┘
-           │ HTTP
-           ▼
-┌─────────────────────────────────────┐
-│   FLASK API (server.py)             │
-│   Puerto: 5001                      │
-│   Backend único con toda la lógica  │
-└──────────┬──────────────────────────┘
-           │
-           ▼
-┌─────────────────────────────────────┐
-│   SERVICIOS EXTERNOS                │
-│   • Google Drive/Sheets             │
-│   • Claude API                      │
-│   • Fal.ai (SeaDream, SeeDance)    │
-│   • Cloudinary                      │
-└─────────────────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│              INTERFACES (Consumidores)              │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  Panel Web (HTML/JS)          Claude Desktop       │
+│         │                            │             │
+│         ↓                            ↓             │
+│   FastAPI (HTTP)              MCP Server (stdio)   │
+│   Puerto: 5001                JSON-RPC             │
+│         │                            │             │
+│         └────────────┬───────────────┘             │
+│                      │                             │
+│                      ↓                             │
+│         ┌────────────────────────┐                 │
+│         │   CAPA DE SERVICIOS    │                 │
+│         │  (Lógica de Negocio)   │                 │
+│         ├────────────────────────┤                 │
+│         │ • ContentService       │                 │
+│         │ • ImageService         │                 │
+│         │ • PostService          │                 │
+│         │ • FileService          │                 │
+│         │ • db_service           │                 │
+│         └────────┬───────────────┘                 │
+│                  │                                  │
+│                  ↓                                  │
+│    ┌─────────────────────────────┐                 │
+│    │   SERVICIOS EXTERNOS        │                 │
+│    │ • Claude API (Anthropic)    │                 │
+│    │ • Fal.ai (SeaDream/SeeDance)│                 │
+│    │ • Storage Local (~/storage) │                 │
+│    │ • SQLite (posts.db)         │                 │
+│    └─────────────────────────────┘                 │
+│                                                     │
+└─────────────────────────────────────────────────────┘
 ```
+
+**Principios clave:**
+- ✅ **Servicios compartidos:** FastAPI y MCP llaman a los mismos métodos
+- ✅ **Sin duplicación:** Lógica de negocio solo existe en servicios
+- ✅ **Protocolos diferentes:** HTTP (web) vs JSON-RPC (IA)
+- ✅ **Storage local:** Archivos en `~/storage/posts/` en lugar de Google Drive
 
 ### 3. ESTRUCTURA DEL REPOSITORIO
 
@@ -81,11 +92,28 @@ Sistema automatizado end-to-end para crear y publicar contenido semanal de triat
 │   ├── index.html
 │   ├── advanced_settings.html
 │   └── social_connect.html
-├── api/                  # Backend Flask
-│   ├── server.py         # API REST principal
-│   ├── sheets_service.py # Google Sheets/Drive
+├── api/                  # Backend FastAPI
+│   ├── main.py           # Punto de entrada FastAPI
+│   ├── server.py         # API Flask (legacy, en desuso)
+│   ├── routers/          # Routers FastAPI
+│   │   ├── posts.py
+│   │   ├── images.py
+│   │   └── files.py
+│   ├── services/         # Capa de servicios (lógica)
+│   │   ├── content_service.py
+│   │   ├── image_service.py
+│   │   ├── post_service.py
+│   │   ├── file_service.py
+│   │   └── db_service.py
 │   ├── requirements.txt
+│   ├── posts.db          # Base de datos SQLite
 │   └── venv/
+├── storage/              # Storage local (reemplaza Drive)
+│   └── posts/
+│       └── [YYYYMMDD-ref]/
+│           ├── textos/
+│           ├── imagenes/
+│           └── videos/
 ├── mcp_server.py         # MCP Server para IAs
 ├── claude_desktop_config.json  # Config Claude Desktop
 ├── MCP_README.md         # Documentación MCP
@@ -103,15 +131,15 @@ Sistema automatizado end-to-end para crear y publicar contenido semanal de triat
 └── README.md
 ```
 
-### 4. GOOGLE DRIVE (Almacenamiento)
-- **Carpeta base:** `Lavelo Blog Content/Posts/2025/`
-- **Estructura por meses:** 12 carpetas (01-Enero hasta 12-Diciembre)
-- **Estructura por posts:** Ver sección "Nomenclatura"
+### 4. STORAGE LOCAL (Almacenamiento)
+- **Ubicación:** `~/lavelo-blog/storage/posts/`
+- **Estructura:** Ver sección "Nomenclatura"
+- **Ventajas:** Más rápido, sin cuotas API, control total
 
-### 5. GOOGLE SHEETS (Base de Datos y Dashboard)
-- **Sheet:** "Lavelo Blog - Content Calendar"
-- **Función:** Control de estados, validaciones y publicación programada
-- **Ver:** [Abrir Content Calendar](https://docs.google.com/spreadsheets/d/1f88LjU0gcBaYm_pqC9c5R29slGLHO6YASesZ8trouug/edit)
+### 5. BASE DE DATOS (SQLite)
+- **Archivo:** `api/posts.db`
+- **Función:** Control de estados, metadatos de posts
+- **Acceso:** A través de `db_service.py`
 
 ---
 
@@ -134,7 +162,7 @@ Donde:
 ### ESTRUCTURA DE CARPETAS POR POST
 
 ```
-[MES]/
+storage/posts/
 └── [CÓDIGO-POST]/
     ├── textos/
     │   ├── [CÓDIGO]_base.txt
@@ -162,7 +190,7 @@ Donde:
 
 **Ejemplo completo:**
 ```
-10-Octubre/
+storage/posts/
 └── 20251020-1/
     ├── textos/
     │   ├── 20251020-1_base.txt
@@ -473,11 +501,12 @@ Estado "ERROR" → 🔴 Rojo (revisar)
 ## 🤖 MCP SERVER - INTEGRACIÓN CON IAs
 
 ### ¿Qué es el MCP Server?
-Servidor que expone las funcionalidades del API Flask a IAs externas (Claude Desktop, Cursor, etc.) usando el protocolo MCP (Model Context Protocol).
+Servidor que expone herramientas a IAs externas (Claude Desktop, Cursor, etc.) usando el protocolo MCP (Model Context Protocol).
 
 ### Características:
-- **Wrapper ligero** sobre Flask API
-- **No duplica lógica** - Solo traduce MCP → HTTP
+- **Protocolo JSON-RPC sobre stdio** (no HTTP)
+- **Llama directamente a servicios** (no pasa por FastAPI)
+- **Comparte lógica con FastAPI** (mismos servicios)
 - **9 herramientas disponibles** para IAs
 - **Configuración simple** en Claude Desktop
 
@@ -534,11 +563,12 @@ Claude: [Usa tool create_post]
 
 ---
 
-## 📚 DOCUMENTACIÓN API (SWAGGER)
+## 📚 DOCUMENTACIÓN
 
-### Acceso:
-- **Desarrollo:** http://localhost:5001/api/docs
-- **Producción:** https://blog.lavelo.es/api/docs
+### 1. API Endpoints (Swagger - FastAPI)
+**Acceso:** http://localhost:5001/docs
+
+**Documenta:** Endpoints HTTP para el panel web
 
 ### Características:
 - ✅ Documentación automática desde código
@@ -547,26 +577,39 @@ Claude: [Usa tool create_post]
 - ✅ Validación de parámetros
 - ✅ Se actualiza automáticamente
 
-### Endpoints Documentados:
+**Endpoints principales:**
 
-**Posts (2):**
-- `GET /api/posts`
-- `POST /api/posts/<codigo>/init-folders`
+**Posts:**
+- `GET /api/posts/` - Lista posts
+- `POST /api/posts/` - Crea post
+- `POST /api/posts/{codigo}/upload-image` - Sube imagen manual
 
-**Content (2):**
-- `POST /api/chat`
-- `POST /api/generate-instructions-from-post`
+**Images:**
+- `POST /api/generate-image` - Genera imagen con Fal.ai
+- `POST /api/format-images` - Formatea para redes
+- `POST /api/improve-prompt-visual` - Mejora prompt con referencias
 
-**Images (3):**
-- `POST /api/generate-image` (✅ soporta referencias)
-- `POST /api/improve-prompt-visual` (✅ soporta referencias)
-- `POST /api/test-fal` (✅ soporta referencias)
+**Files:**
+- `GET /api/files/{codigo}/{folder}/{filename}` - Lee archivo
+- `POST /api/files/{codigo}/{folder}/{filename}` - Guarda archivo
 
-**Videos (2):**
-- `POST /api/generate-video-text` (❌ no soporta referencias)
-- `POST /api/generate-video-image` (❌ no soporta referencias)
+### 2. Servicios (pdoc)
+**Acceso:** http://localhost:8080
 
-**Ver:** `api/API_DOCUMENTATION.md` para ejemplos de uso
+**Documenta:** Clases y métodos Python (lógica de negocio)
+
+**Para iniciar:**
+```bash
+cd api
+pdoc services -h localhost -p 8080
+```
+
+**Servicios documentados:**
+- `ContentService` - Generación de contenido con Claude
+- `ImageService` - Generación de imágenes con Fal.ai
+- `PostService` - Gestión de posts
+- `FileService` - Gestión de archivos locales
+- `db_service` - Base de datos SQLite
 
 ---
 
@@ -592,11 +635,13 @@ Claude: [Usa tool create_post]
 - **Cloudinary AI:** Smart reframing de videos con detección de sujetos
 
 ### Backend:
-- **Flask:** API REST para el panel web
+- **FastAPI:** API REST para el panel web (HTTP)
+- **MCP Server:** Herramientas para Claude Desktop (JSON-RPC)
 - **Python 3.13:** Lenguaje principal
-- **Google Sheets API:** Lectura de estados y actualización
-- **Google Drive API:** Almacenamiento y gestión de archivos
+- **SQLite:** Base de datos local
+- **Storage local:** Archivos en `~/storage/posts/`
 - **Anthropic API:** Integración con Claude
+- **pdoc:** Documentación automática de servicios
 
 ### Frontend:
 - **HTML5 + CSS3:** Interfaz del panel
@@ -627,15 +672,21 @@ Claude: [Usa tool create_post]
 
 ### **Vista de Detalles (details.html)**
 - ✅ Edición de contenido por fase
-- ✅ Guardado individual de textos en Drive
+- ✅ Guardado individual de textos en storage local
 - ✅ Detección de cambios (botón "Guardar" solo si hay modificaciones)
-- ✅ Preview de imágenes desde Drive
-- ✅ **Subida manual de imágenes** (alternativa a generación con IA)
+- ✅ Preview de imágenes desde storage local
+- ✅ **Prompt Builder visual** (Fase 3)
+  - Botón "🎨 Mejorar con Imagen"
+  - Selecciones visuales (estilo, composición, iluminación)
+  - Hasta 2 imágenes de referencia con nivel de influencia
+  - Genera prompt mejorado con Claude
+  - Guarda referencias en storage local
+- ✅ **Subida manual de imágenes** (Fase 4)
+  - Botón "📤 Reemplazar con mi Imagen"
   - Formatos: PNG, JPG, JPEG
   - Máximo: 10MB
-  - Sin validación de dimensiones
   - Preview antes de confirmar
-  - Overlay con spinner durante subida
+  - Codificación base64 para envío
 - ✅ **Sistema de advertencia para editar fases validadas**
   - Modal con lista de fases que se resetearán
   - Botones: "Cancelar" (vuelve al panel) / "Continuar" (permite editar)
@@ -663,27 +714,52 @@ Claude: [Usa tool create_post]
 - ✅ Flujo conversacional: Claude pregunta qué mejorar
 - ✅ Regeneración inteligente: Si cambias prompt, se resetean fases posteriores
 
-### **Subida Manual de Imágenes**
-**Fase 3 (Prompt de Imagen):**
-- Opción "— O —" para subir imagen propia
-- Evita necesidad de generar con IA
-- Crea prompt placeholder con metadatos
+### **Prompt Builder Visual (Fase 3)**
+**Ubicación:** Botón "🎨 Mejorar con Imagen" en Fase 3
 
-**Fase 4 (Imagen Generada):**
-- Botón "Reemplazar con mi Imagen"
-- Útil si la IA no generó lo esperado
-- Reemplaza imagen y prompt
+**Funcionalidades:**
+1. Abre `prompt_builder.html` en nueva ventana
+2. Muestra prompt actual editable
+3. Permite seleccionar opciones visuales:
+   - Estilo (realistic, cinematic, editorial, etc.)
+   - Composición (centered, rule of thirds, etc.)
+   - Iluminación (natural, golden hour, studio, etc.)
+4. Permite subir hasta 2 imágenes de referencia
+5. Cada referencia tiene nivel de influencia:
+   - 0.5: Inspiración (mood/colores)
+   - 1.0: Guía (estructura similar)
+   - 2.0: Exacta (replicar elemento)
+6. Click "✨ APLICAR":
+   - Claude mejora el prompt incorporando selecciones
+   - Guarda referencias en `storage/posts/{codigo}/imagenes/`
+   - Guarda metadata en `{codigo}_referencias_metadata.json`
+   - Actualiza prompt en `{codigo}_prompt_imagen.txt`
+   - Cierra ventana y recarga details
 
 **Flujo:**
-1. Click "Seleccionar Imagen"
-2. Preview de la imagen
-3. Validación: formato (PNG/JPG) y tamaño (<10MB)
-4. Click "Confirmar y Subir"
-5. Overlay con spinner: "Guardando en Google Drive..."
-6. Imagen se guarda como `imagen_base.png`
-7. Prompt placeholder se crea automáticamente
-8. Checkboxes se actualizan
-9. Estado cambia a `IMAGE_BASE_AWAITING`
+```
+Fase 3 → Click "🎨 Mejorar con Imagen"
+       → Abre Prompt Builder
+       → Selecciona opciones + sube referencias
+       → Click "✨ APLICAR"
+       → Claude mejora prompt
+       → Guarda todo en storage local
+       → Vuelve a Fase 3 (prompt mejorado visible)
+```
+
+### **Subida Manual de Imágenes (Fase 4)**
+**Ubicación:** Botón "📤 Reemplazar con mi Imagen" en Fase 4
+
+**Flujo:**
+1. Click "📤 Reemplazar con mi Imagen"
+2. Seleccionar archivo (PNG/JPG, máx 10MB)
+3. Preview de la imagen
+4. Click "✅ Confirmar y Guardar"
+5. Conversión a base64
+6. Envío como JSON a `/api/posts/{codigo}/upload-image`
+7. Guarda como `{codigo}_imagen_base.png`
+8. Actualiza checkbox en BD
+9. Recarga página
 
 ### **Edición de Fases Validadas**
 **Problema resuelto:** Antes no podías volver a editar fases ya completadas.

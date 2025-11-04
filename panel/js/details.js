@@ -192,8 +192,8 @@ async function renderImagePromptPhase() {
                         <p style="color: #666; margin-bottom: 15px;">Estas imágenes se usarán como guía en la generación:</p>
                         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
                             ${metadata.references.map((ref, idx) => {
-                                // Usar URL directa de Drive si existe, sino usar proxy
-                                const imageUrl = ref.drive_url || `${API_BASE}/drive/image?codigo=${codigo}&folder=imagenes&filename=${encodeURIComponent(ref.filename)}`;
+                                // Usar storage local
+                                const imageUrl = `${API_BASE}/files/${codigo}/imagenes/${encodeURIComponent(ref.filename)}`;
                                 return `
                                 <div style="text-align: center;">
                                     <img src="${imageUrl}" 
@@ -229,30 +229,12 @@ async function renderImagePromptPhase() {
                 <div class="save-btn-container">
                     <button class="save-btn" id="save-prompt_imagen" onclick="guardarTextoIndividual('prompt_imagen', 'prompt-editor')">💾 Guardar Prompt</button>
                     <button class="ai-btn" onclick="mejorarConIA('prompt_imagen', 'prompt-editor')">✨ Mejorar con IA</button>
-                    <button class="ai-btn" onclick="abrirPromptBuilder('${escapeHtml(promptText || '')}')" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">🎨 Mejorar con Imagen</button>
+                    <button class="ai-btn" onclick="abrirPromptBuilderFromTextarea()" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">🎨 Mejorar con Imagen</button>
                     <span class="save-status" id="status-prompt_imagen">✅ Guardado</span>
                 </div>
             </div>
             
             ${referencesHTML}
-            
-            <div style="text-align: center; margin: 30px 0; color: #999; font-weight: bold;">— O —</div>
-            
-            <div class="text-item">
-                <h3>📤 Subir tu Propia Imagen</h3>
-                <p style="color: #666; margin-bottom: 15px;">Si ya tienes una imagen, súbela directamente sin necesidad de generar con IA.</p>
-                <div style="text-align: center;">
-                    <input type="file" id="upload-image-input" accept="image/png,image/jpeg,image/jpg" style="display: none;" onchange="handleImageUpload(event)">
-                    <button class="ai-btn" onclick="document.getElementById('upload-image-input').click()">⬆️ Seleccionar Imagen</button>
-                    <p style="color: #999; font-size: 0.85em; margin-top: 10px;">Formatos: PNG, JPG • Máximo: 10MB</p>
-                </div>
-                <div id="upload-preview" style="margin-top: 15px; display: none;">
-                    <img id="preview-img" style="max-width: 300px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                    <p id="preview-info" style="color: #666; font-size: 0.9em; margin-top: 10px;"></p>
-                    <button class="ai-btn" onclick="confirmarSubidaImagen()" style="margin-top: 10px;">✅ Confirmar y Subir</button>
-                    <button class="btn-secondary" onclick="cancelarSubidaImagen()" style="margin-top: 10px; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer;">❌ Cancelar</button>
-                </div>
-            </div>
         </div>
     `;
     
@@ -299,7 +281,7 @@ async function renderImageBasePhase() {
         `;
     } else {
         // Imagen ya existe, mostrar preview
-        const imageUrl = `/api/drive/image?codigo=${codigo}&folder=imagenes&filename=${codigo}_imagen_base.png`;
+        const imageUrl = `/api/files/${codigo}/imagenes/${codigo}_imagen_base.png`;
         
         phaseContent.innerHTML = `
             <div class="phase-section">
@@ -338,16 +320,12 @@ async function renderImageBasePhase() {
     }
 }
 
-// Función para verificar si una imagen existe (usando metadata en vez de proxy)
+// Función para verificar si una imagen existe en storage local
 async function checkImageExists(folder, filename) {
     try {
-        // Intentar leer desde Drive API directamente (más confiable que proxy)
-        const response = await fetch(`${API_BASE}/drive/file-exists?codigo=${codigo}&folder=${folder}&filename=${filename}`);
-        if (response.ok) {
-            const result = await response.json();
-            return result.exists;
-        }
-        return false;
+        // Verificar en storage local usando el endpoint /api/files/
+        const response = await fetch(`${API_BASE}/files/${codigo}/${folder}/${filename}`);
+        return response.ok;
     } catch (error) {
         console.error('Error verificando imagen:', error);
         return false;
@@ -381,7 +359,7 @@ async function generateImageWithAI() {
             imagesHTML += '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">';
             
             result.images.forEach((img, idx) => {
-                const imageUrl = `/api/drive/image?codigo=${codigo}&folder=imagenes&filename=${img.filename}`;
+                const imageUrl = `/api/files/${codigo}/imagenes/${img.filename}`;
                 imagesHTML += `
                     <div style="text-align: center; padding: 15px; border: 2px solid #ddd; border-radius: 10px; cursor: pointer;" onclick="selectGeneratedImage('${img.filename}', ${idx})">
                         <img src="${imageUrl}" style="width: 100%; border-radius: 8px;" alt="Variación ${idx + 1}">
@@ -468,7 +446,7 @@ async function loadImageWithRetry(filename, containerId, altText, maxRetries = 3
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-            const url = `/api/drive/image?codigo=${codigo}&folder=imagenes&filename=${filename}&t=${Date.now()}`;
+            const url = `/api/files/${codigo}/imagenes/${filename}?t=${Date.now()}`;
             
             // Verificar que la imagen existe antes de mostrarla
             const response = await fetch(url);
@@ -536,7 +514,7 @@ async function renderVideoBasePhase() {
                 <h3>🎬 Video Base</h3>
                 <div style="text-align: center; padding: 20px;">
                     <video controls style="max-width: 100%; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
-                        <source src="/api/drive/video?codigo=${codigo}&folder=videos&filename=${codigo}_video_base.mp4" type="video/mp4">
+                        <source src="/api/files/${codigo}/videos/${codigo}_video_base.mp4" type="video/mp4">
                         Tu navegador no soporta video.
                     </video>
                 </div>
@@ -587,7 +565,7 @@ async function loadVideoWithRetry(filename, containerId, altText, maxRetries = 3
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-            const url = `/api/drive/video?codigo=${codigo}&folder=videos&filename=${filename}&t=${Date.now()}`;
+            const url = `/api/files/${codigo}/videos/${filename}?t=${Date.now()}`;
             
             // Verificar que el video existe antes de mostrarlo
             const response = await fetch(url);
@@ -633,10 +611,10 @@ async function renderReadyToPublishPhase() {
     `;
 }
 
-// Obtener archivo de Drive
+// Obtener archivo del storage local
 async function fetchFileFromDrive(folder, filename) {
     try {
-        const response = await fetch(`/api/drive/file?codigo=${codigo}&folder=${folder}&filename=${filename}`);
+        const response = await fetch(`/api/files/${codigo}/${folder}/${filename}`);
         if (!response.ok) return null;
         const data = await response.json();
         return data.content;
@@ -696,7 +674,7 @@ async function guardarTextoIndividual(tipo, editorId) {
             filename = `${codigo}_${tipo}.txt`;
         }
         
-        const response = await fetch('/api/drive/save-file', {
+        const response = await fetch(`/api/files/${codigo}/textos/${filename}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -935,7 +913,7 @@ async function generateVariationsWithFalAI() {
             let gridHTML = '';
             
             result.images.forEach((img, idx) => {
-                const imageUrl = `/api/drive/image?codigo=${codigo}&folder=imagenes&filename=${img.filename}`;
+                const imageUrl = `/api/files/${codigo}/imagenes/${img.filename}`;
                 gridHTML += `
                     <div style="text-align: center; padding: 15px; border: 2px solid #ddd; border-radius: 10px; cursor: pointer; transition: all 0.3s;" 
                          onclick="selectFalVariation('${img.filename}', ${idx + 1})"
@@ -990,83 +968,9 @@ async function selectFalVariation(filename, variationNumber) {
 }
 
 // ============================================
-// SUBIDA MANUAL DE IMÁGENES
+// SUBIR/REEMPLAZAR IMAGEN MANUAL (FASE 4)
 // ============================================
-
 let selectedImageFile = null;
-
-// FASE 3: Manejar selección de imagen
-function handleImageUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    // Validar formato
-    const validTypes = ['image/png', 'image/jpeg', 'image/jpg'];
-    if (!validTypes.includes(file.type)) {
-        alert('Formato no válido. Usa PNG o JPG.');
-        return;
-    }
-    
-    // Validar tamaño (10MB)
-    const maxSize = 10 * 1024 * 1024;
-    if (file.size > maxSize) {
-        alert('Archivo muy grande. Máximo 10MB.');
-        return;
-    }
-    
-    selectedImageFile = file;
-    
-    // Mostrar preview
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        document.getElementById('preview-img').src = e.target.result;
-        document.getElementById('preview-info').textContent = `${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
-        document.getElementById('upload-preview').style.display = 'block';
-    };
-    reader.readAsDataURL(file);
-}
-
-function cancelarSubidaImagen() {
-    selectedImageFile = null;
-    document.getElementById('upload-image-input').value = '';
-    document.getElementById('upload-preview').style.display = 'none';
-}
-
-async function confirmarSubidaImagen() {
-    if (!selectedImageFile) {
-        alert('No hay imagen seleccionada');
-        return;
-    }
-    
-    // Mostrar overlay
-    showUploadOverlay('Subiendo imagen...', 'Guardando en Google Drive, por favor espera...');
-    
-    const formData = new FormData();
-    formData.append('image', selectedImageFile);
-    
-    try {
-        const response = await fetch(`${API_BASE}/posts/${codigo}/upload-image`, {
-            method: 'POST',
-            body: formData
-        });
-        
-        const result = await response.json();
-        
-        hideUploadOverlay();
-        
-        if (result.success) {
-            showSuccess(result.message);
-            setTimeout(() => {
-                location.reload();
-            }, 2000);
-        } else {
-            showError(result.error || 'Error subiendo imagen');
-        }
-    } catch (error) {
-        hideUploadOverlay();
-        showError('Error de conexión: ' + error.message);
-    }
-}
 
 // FASE 4: Reemplazar imagen
 function reemplazarImagenManual() {
@@ -1116,15 +1020,27 @@ async function confirmarSubidaImagenFase4() {
     }
     
     // Mostrar overlay
-    showUploadOverlay('Reemplazando imagen...', 'Guardando en Google Drive, por favor espera...');
-    
-    const formData = new FormData();
-    formData.append('image', selectedImageFile);
+    showUploadOverlay('Reemplazando imagen...', 'Guardando imagen, por favor espera...');
     
     try {
+        // Convertir imagen a base64
+        const reader = new FileReader();
+        const imageBase64 = await new Promise((resolve, reject) => {
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(selectedImageFile);
+        });
+        
+        // Enviar como JSON con base64
         const response = await fetch(`${API_BASE}/posts/${codigo}/upload-image`, {
             method: 'POST',
-            body: formData
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                image_data: imageBase64,
+                filename: `${codigo}_imagen_base.png`
+            })
         });
         
         const result = await response.json();
@@ -1177,30 +1093,30 @@ function isPhaseValidated(estado) {
     const currentPhaseNum = stateToPhase[estado];
     if (!currentPhaseNum) return false;
     
-    // Verificar si hay fases posteriores completadas
-    // Por ahora, asumimos que si el estado actual es menor que el estado real del post, está validado
-    // Esto lo detectaremos mejor cuando tengamos el estado completo del post
-    
-    // Por simplicidad, verificamos los checkboxes del post
     const post = currentPost;
+    if (!post) return false;
     
+    // Función helper para convertir a booleano
+    const toBool = (val) => val === 1 || val === true || val === 'TRUE' || val === '1';
+    
+    // Verificar si la fase actual ya fue completada (tiene checkboxes marcados)
     switch (estado) {
         case 'BASE_TEXT_AWAITING':
-            return post.base_text === 'TRUE';
+            return toBool(post.base_txt);
         case 'ADAPTED_TEXTS_AWAITING':
-            return post.instagram_text === 'TRUE' || post.linkedin_text === 'TRUE';
+            return toBool(post.instagram_txt) || toBool(post.linkedin_txt) || toBool(post.twitter_txt);
         case 'IMAGE_PROMPT_AWAITING':
-            return post.image_prompt === 'TRUE';
+            return toBool(post.prompt_imagen_base_txt);
         case 'IMAGE_BASE_AWAITING':
-            return post.image_base === 'TRUE';
+            return toBool(post.imagen_base_png);
         case 'IMAGE_FORMATS_AWAITING':
-            return post.instagram_image === 'TRUE';
+            return toBool(post.instagram_1x1_png) || toBool(post.linkedin_16x9_png);
         case 'VIDEO_PROMPT_AWAITING':
-            return post.video_prompt === 'TRUE';
+            return toBool(post.script_video_base_txt);
         case 'VIDEO_BASE_AWAITING':
-            return post.video_base === 'TRUE';
+            return toBool(post.video_base_mp4);
         case 'VIDEO_FORMATS_AWAITING':
-            return post.instagram_video === 'TRUE';
+            return toBool(post.feed_16x9_mp4) || toBool(post.stories_9x16_mp4);
         default:
             return false;
     }
@@ -1301,13 +1217,50 @@ async function resetDependentPhases(estadoParaReset) {
 // PROMPT BUILDER VISUAL
 // ============================================
 
+function abrirPromptBuilderFromTextarea() {
+    try {
+        // Leer el prompt actual del textarea
+        const textarea = document.getElementById('prompt-editor');
+        const promptActual = textarea ? textarea.value : '';
+        
+        // Construir URL con parámetros
+        const params = new URLSearchParams({
+            codigo: codigo,
+            prompt: promptActual
+        });
+        
+        // Abrir en nueva ventana
+        const url = `prompt_builder.html?${params.toString()}`;
+        const newWindow = window.open(url, '_blank', 'width=1200,height=800');
+        
+        // Si el navegador bloqueó el popup, abrir en la misma pestaña
+        if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+            window.location.href = url;
+        }
+    } catch (error) {
+        console.error('Error abriendo Prompt Builder:', error);
+        alert('Error abriendo el editor visual. Revisa la consola.');
+    }
+}
+
 function abrirPromptBuilder(promptActual) {
-    // Construir URL con parámetros
-    const params = new URLSearchParams({
-        codigo: codigo,
-        prompt: promptActual || ''
-    });
-    
-    // Abrir en nueva ventana
-    window.open(`prompt_builder.html?${params.toString()}`, '_blank', 'width=1200,height=800');
+    try {
+        // Construir URL con parámetros
+        const params = new URLSearchParams({
+            codigo: codigo,
+            prompt: promptActual || ''
+        });
+        
+        // Abrir en nueva ventana
+        const url = `prompt_builder.html?${params.toString()}`;
+        const newWindow = window.open(url, '_blank', 'width=1200,height=800');
+        
+        // Si el navegador bloqueó el popup, abrir en la misma pestaña
+        if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+            window.location.href = url;
+        }
+    } catch (error) {
+        console.error('Error abriendo Prompt Builder:', error);
+        alert('Error abriendo el editor visual. Revisa la consola.');
+    }
 }

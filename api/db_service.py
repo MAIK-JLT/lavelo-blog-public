@@ -4,7 +4,7 @@ Servicio de base de datos MySQL para reemplazar sheets_service.py
 Proporciona las mismas funciones pero usando MySQL en lugar de Google Sheets
 """
 from database import SessionLocal
-from models import Post, SocialToken
+from db_models import Post, SocialToken
 from datetime import datetime
 from typing import List, Dict, Optional
 

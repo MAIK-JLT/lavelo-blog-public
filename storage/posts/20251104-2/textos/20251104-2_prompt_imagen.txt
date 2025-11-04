@@ -1,0 +1,54 @@
+# Enhanced Image Prompt
+
+Ultra-realistic professional sports photography composition featuring triathlon performance optimization in square format.
+
+MAIN SCENE: 1:1 square aspect ratio with integrated three-zone composition:
+
+FULL-BODY PERSPECTIVE: Complete athlete view from head to toe
+
+LEFT PANEL (33%): Transition area close-up
+Athlete's hands quickly fastening race belt with number
+Visible elastic laces being pulled tight on running shoes
+Wetsuit being stripped off in one fluid motion
+Sharp focus on speed and efficiency
+
+CENTER FOCAL POINT: Large digital stopwatch display
+Showing "3:00" in bold LED numbers
+Golden glow emanating from the display
+Subtle motion blur suggesting time savings
+Small "+3 MIN ADVANTAGE" text below
+
+RIGHT PANEL (33%): Aerodynamic cycling detail
+Cyclist in perfect aero tuck position, shot from side angle
+Visible airflow lines streaming over helmet and back
+Deep section carbon wheels with motion blur
+Power meter displaying watts on handlebars
+
+VISUAL STYLE:
+Studio lighting setup with dramatic rim lights and directional key light
+Monochromatic black and white color palette throughout
+High contrast noir aesthetic with selective tonal grading
+Dark gradient background (charcoal to black)
+Matte texture finish eliminating glossy reflections
+Ultra-sharp tack focus on all key details across full compositions
+Subtle geometric shadows framing each section
+Minimal lens flare on metallic surfaces maintaining sophistication
+
+OVERLAY ELEMENTS:
+Semi-transparent data overlays showing:
+* "-15 seconds" near transition elements
+* "Watts saved: 20" near aero position
+* "CdA: 0.23" near cyclist
+Clean sans-serif typography rendered in white with subtle gray tones
+
+CAMERA & COMPOSITION:
+Wide-angle lens perspective capturing full-body athlete positioning
+Square format optimizing visual balance across all three zones
+Professional commercial sports photography quality
+Magazine cover-worthy technical execution
+
+REFERENCE VISUAL GUIDE:
+Use provided reference image (20251104-2_referencia_1.png) as exact replication guide for key compositional elements and pose accuracy
+
+MOOD: Professional, technical, aspirational, high-performance
+RENDERING: Photorealistic, monochromatic studio sports photography, ultra-detailed matte finish

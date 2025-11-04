@@ -1,0 +1,19 @@
+{
+  "references": [
+    {
+      "filename": "20251104-2_referencia_1.png",
+      "influence": 2.0,
+      "label": "Exacta (replicar elemento)"
+    }
+  ],
+  "selections": {
+    "perspective": "Cuerpo entero",
+    "lighting": "Luz de estudio",
+    "style": "Realista",
+    "composition": "Cuadrado",
+    "camera": "Gran angular",
+    "color": "Blanco y negro",
+    "texture": "Mate",
+    "quality": "Ultra realista"
+  }
+}

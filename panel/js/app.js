@@ -76,9 +76,8 @@ function renderPostInfo(data) {
             </button>
         </div>
         <p><strong>Código:</strong> ${data.codigo}</p>
-        <p><strong>Idea:</strong> ${data.idea || 'Sin descripción'}</p>
+        <p><strong>Categoría:</strong> ${data.categoria || 'Sin categoría'}</p>
         <span class="status ${statusClass}">${formatStatus(data.estado)}</span>
-        ${data.drive_folder_id ? `<p style="margin-top: 10px;"><a href="https://drive.google.com/drive/folders/${data.drive_folder_id}" target="_blank">📁 Ver en Drive</a></p>` : ''}
     `;
 }
 
@@ -435,17 +434,19 @@ function updateNetworksFromPost(post) {
     
     // Bloquear checkboxes si ya pasó de Fase 1
     const canEditNetworks = post.estado === 'DRAFT' || post.estado === 'BASE_TEXT_AWAITING';
-    const checkboxes = document.querySelectorAll('.network-checkbox input[type="checkbox"]:not([value="blog"])');
+    const checkboxes = document.querySelectorAll('input[type="checkbox"][id^="network-"]:not(#network-blog)');
     const warning = document.getElementById('networks-warning');
     
     checkboxes.forEach(checkbox => {
         checkbox.disabled = !canEditNetworks;
     });
     
-    if (!canEditNetworks) {
-        warning.style.display = 'block';
-    } else {
-        warning.style.display = 'none';
+    if (warning) {
+        if (!canEditNetworks) {
+            warning.style.display = 'block';
+        } else {
+            warning.style.display = 'none';
+        }
     }
 }
 
@@ -487,26 +488,28 @@ async function onNetworkChange() {
 }
 
 function getSelectedNetworks() {
-    // Obtener redes del post actual (no de localStorage)
-    if (!currentPost) {
+    // Leer directamente de los checkboxes del DOM (estado actual en el panel)
+    const networks = {};
+    const checkboxes = document.querySelectorAll('input[type="checkbox"][id^="network-"]');
+    
+    checkboxes.forEach(checkbox => {
+        const networkName = checkbox.id.replace('network-', '');
+        networks[networkName] = checkbox.checked;
+    });
+    
+    // Si no hay checkboxes (no se han renderizado), usar valores por defecto
+    if (Object.keys(networks).length === 0) {
         return {
-            instagram: false,
-            linkedin: false,
-            twitter: false,
-            facebook: false,
-            tiktok: false,
-            blog: true  // Solo Blog activo por defecto
+            instagram: true,
+            linkedin: true,
+            twitter: true,
+            facebook: true,
+            tiktok: true,
+            blog: true
         };
     }
     
-    return {
-        instagram: currentPost.redes_instagram === 'TRUE',
-        linkedin: currentPost.redes_linkedin === 'TRUE',
-        twitter: currentPost.redes_twitter === 'TRUE',
-        facebook: currentPost.redes_facebook === 'TRUE',
-        tiktok: currentPost.redes_tiktok === 'TRUE',
-        blog: currentPost.redes_blog === 'TRUE'
-    };
+    return networks;
 }
 
 // ============================================

@@ -129,7 +129,7 @@ def get_cached_posts():
     
     if posts_cache['data'] is None or (current_time - posts_cache['timestamp']) > CACHE_TTL:
         try:
-            posts_cache['data'] = sheets_service.get_posts()
+            posts_cache['data'] = db_service.get_all_posts()
             posts_cache['timestamp'] = current_time
         except Exception as e:
             print(f"⚠️ Error obteniendo posts (usando caché antiguo si existe): {e}")
@@ -264,9 +264,8 @@ def init_post_folders(codigo):
         description: Error del servidor
     """
     try:
-        # Obtener post
-        posts = sheets_service.get_posts()
-        post = next((p for p in posts if p['codigo'] == codigo), None)
+        # Obtener post de MySQL
+        post = db_service.get_post_by_codigo(codigo)
         
         if not post or not post.get('drive_folder_id'):
             return jsonify({'error': 'Post no encontrado o sin Drive Folder ID'}), 404
@@ -360,8 +359,7 @@ def get_drive_file():
             return jsonify({'error': 'Faltan parámetros'}), 400
         
         # Obtener folder_id del post
-        posts = sheets_service.get_posts()
-        post = next((p for p in posts if p['codigo'] == codigo), None)
+        post = db_service.get_post_by_codigo(codigo)
         
         if not post or not post.get('drive_folder_id'):
             return jsonify({'error': 'Post no encontrado'}), 404
@@ -553,8 +551,7 @@ def save_drive_file():
             return jsonify({'error': 'Faltan parámetros'}), 400
         
         # Obtener folder_id del post
-        posts = sheets_service.get_posts()
-        post = next((p for p in posts if p['codigo'] == codigo), None)
+        post = db_service.get_post_by_codigo(codigo)
         
         if not post or not post.get('drive_folder_id'):
             return jsonify({'error': 'Post no encontrado'}), 404
@@ -636,8 +633,7 @@ def get_status():
     if 'credentials' not in session:
         return jsonify({'error': 'Not authenticated'}), 401
     
-    sheets_service.authenticate(session['credentials'])
-    posts = sheets_service.get_posts()
+    posts = db_service.get_all_posts()
     
     if posts:
         return jsonify(posts[0])
@@ -729,13 +725,12 @@ def validate_phase():
         # CASO ESPECIAL: BASE_TEXT_AWAITING → Generar textos adaptados con Claude
         if current_state == 'BASE_TEXT_AWAITING':
             # Obtener folder_id del post
-            posts = sheets_service.get_posts()
-            post = next((p for p in posts if p['codigo'] == codigo), None)
+            post = db_service.get_post_by_codigo(codigo)
             if not post:
-                return jsonify({'error': f'Post {codigo} no encontrado en el Excel'}), 400
+                return jsonify({'error': f'Post {codigo} no encontrado'}), 400
             
             if not post.get('drive_folder_id'):
-                return jsonify({'error': f'El post {codigo} no tiene Drive Folder ID configurado en la columna G del Excel'}), 400
+                return jsonify({'error': f'El post {codigo} no tiene Drive Folder ID configurado'}), 400
             
             folder_id = post['drive_folder_id']
             print(f"📁 Drive Folder ID del post: {folder_id}")
@@ -795,8 +790,7 @@ Genera SOLO el texto adaptado, sin explicaciones ni metadatos."""
         # CASO ESPECIAL: ADAPTED_TEXTS_AWAITING → Generar prompt de imagen
         if current_state == 'ADAPTED_TEXTS_AWAITING':
             # Obtener folder_id del post
-            posts = sheets_service.get_posts()
-            post = next((p for p in posts if p['codigo'] == codigo), None)
+            post = db_service.get_post_by_codigo(codigo)
             if not post or not post.get('drive_folder_id'):
                 return jsonify({'error': 'Post no encontrado o sin carpeta de Drive'}), 400
             
@@ -851,8 +845,7 @@ Genera SOLO el prompt en inglés, sin explicaciones."""
         # CASO ESPECIAL: IMAGE_PROMPT_AWAITING → Generar imagen base
         if current_state == 'IMAGE_PROMPT_AWAITING':
             # Obtener folder_id del post
-            posts = sheets_service.get_posts()
-            post = next((p for p in posts if p['codigo'] == codigo), None)
+            post = db_service.get_post_by_codigo(codigo)
             if not post or not post.get('drive_folder_id'):
                 return jsonify({'error': 'Post no encontrado o sin carpeta de Drive'}), 400
             
@@ -902,8 +895,7 @@ Genera SOLO el prompt en inglés, sin explicaciones."""
             print("🖼️ Formateando imágenes con Cloudinary (crop inteligente)...")
             
             # Obtener folder_id del post
-            posts = sheets_service.get_posts()
-            post = next((p for p in posts if p['codigo'] == codigo), None)
+            post = db_service.get_post_by_codigo(codigo)
             if not post or not post.get('drive_folder_id'):
                 return jsonify({'error': 'Post no encontrado o sin carpeta de Drive'}), 400
             
@@ -1068,8 +1060,7 @@ Genera SOLO el prompt en inglés, sin explicaciones."""
         # CASO ESPECIAL: IMAGE_FORMATS_AWAITING → Generar script de video
         if current_state == 'IMAGE_FORMATS_AWAITING':
             # Obtener folder_id del post
-            posts = sheets_service.get_posts()
-            post = next((p for p in posts if p['codigo'] == codigo), None)
+            post = db_service.get_post_by_codigo(codigo)
             if not post or not post.get('drive_folder_id'):
                 return jsonify({'error': 'Post no encontrado o sin carpeta de Drive'}), 400
             
@@ -1119,8 +1110,7 @@ Genera SOLO el script con 4 escenas, sin explicaciones adicionales."""
         # CASO ESPECIAL: VIDEO_PROMPT_AWAITING → Generar video base con Sora
         if current_state == 'VIDEO_PROMPT_AWAITING':
             # Obtener folder_id del post
-            posts = sheets_service.get_posts()
-            post = next((p for p in posts if p['codigo'] == codigo), None)
+            post = db_service.get_post_by_codigo(codigo)
             if not post or not post.get('drive_folder_id'):
                 return jsonify({'error': 'Post no encontrado o sin carpeta de Drive'}), 400
             
@@ -1200,8 +1190,7 @@ Genera SOLO el script con 4 escenas, sin explicaciones adicionales."""
         # CASO ESPECIAL: VIDEO_BASE_AWAITING → Formatear videos con Cloudinary
         if current_state == 'VIDEO_BASE_AWAITING':
             # Obtener folder_id del post
-            posts = sheets_service.get_posts()
-            post = next((p for p in posts if p['codigo'] == codigo), None)
+            post = db_service.get_post_by_codigo(codigo)
             if not post or not post.get('drive_folder_id'):
                 return jsonify({'error': 'Post no encontrado o sin carpeta de Drive'}), 400
             
@@ -1321,8 +1310,7 @@ Genera SOLO el script con 4 escenas, sin explicaciones adicionales."""
         # CASO ESPECIAL: VIDEO_FORMATS_AWAITING → Verificar archivos
         if current_state == 'VIDEO_FORMATS_AWAITING':
             # Obtener folder_id del post
-            posts = sheets_service.get_posts()
-            post = next((p for p in posts if p['codigo'] == codigo), None)
+            post = db_service.get_post_by_codigo(codigo)
             if not post or not post.get('drive_folder_id'):
                 return jsonify({'error': 'Post no encontrado o sin carpeta de Drive'}), 400
             
@@ -1458,8 +1446,7 @@ def format_images():
         print(f"\n🎨 Formateando imágenes para {codigo}...")
         
         # 1. Obtener post
-        posts = sheets_service.get_posts()
-        post = next((p for p in posts if p['codigo'] == codigo), None)
+        post = db_service.get_post_by_codigo(codigo)
         
         if not post:
             return jsonify({'error': f'Post {codigo} no encontrado'}), 404
@@ -1725,11 +1712,31 @@ def generate_video_text():
         )
         
         print(f"✅ Video generado!")
-        print(f"🎥 URL: {result['video']['url']}")
+        video_url = result['video']['url']
+        print(f"🎥 URL: {video_url}")
+        
+        # Descargar y guardar video localmente
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        results_dir = os.path.join(os.path.dirname(__file__), '..', 'falai', 'test_results')
+        os.makedirs(results_dir, exist_ok=True)
+        
+        print(f"📥 Descargando video...")
+        response = requests.get(video_url)
+        video_bytes = response.content
+        
+        filename = f"test_{timestamp}_video.mp4"
+        filepath = os.path.join(results_dir, filename)
+        
+        with open(filepath, 'wb') as f:
+            f.write(video_bytes)
+        
+        print(f"💾 Video guardado: {filename} ({len(video_bytes) / 1024 / 1024:.1f} MB)")
         
         return jsonify({
             'success': True,
-            'video_url': result['video']['url'],
+            'video_url': video_url,
+            'local_path': filepath,
+            'filename': filename,
             'duration': result.get('timings', {}).get('inference', 0),
             'resolution': f"{width}x{height}"
         })
@@ -1833,11 +1840,31 @@ def generate_video_image():
         )
         
         print(f"✅ Video generado!")
-        print(f"🎥 URL: {result['video']['url']}")
+        video_url = result['video']['url']
+        print(f"🎥 URL: {video_url}")
+        
+        # Descargar y guardar video localmente
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        results_dir = os.path.join(os.path.dirname(__file__), '..', 'falai', 'test_results')
+        os.makedirs(results_dir, exist_ok=True)
+        
+        print(f"📥 Descargando video...")
+        response = requests.get(video_url)
+        video_bytes = response.content
+        
+        filename = f"test_{timestamp}_video.mp4"
+        filepath = os.path.join(results_dir, filename)
+        
+        with open(filepath, 'wb') as f:
+            f.write(video_bytes)
+        
+        print(f"💾 Video guardado: {filename} ({len(video_bytes) / 1024 / 1024:.1f} MB)")
         
         return jsonify({
             'success': True,
-            'video_url': result['video']['url'],
+            'video_url': video_url,
+            'local_path': filepath,
+            'filename': filename,
             'duration': result.get('timings', {}).get('inference', 0),
             'resolution': f"{width}x{height}"
         })
@@ -1992,8 +2019,7 @@ def upload_manual_image(codigo):
             return jsonify({'error': 'Archivo muy grande. Máximo 10MB'}), 400
         
         # 4. Obtener post
-        posts = sheets_service.get_posts()
-        post = next((p for p in posts if p['codigo'] == codigo), None)
+        post = db_service.get_post_by_codigo(codigo)
         
         if not post:
             return jsonify({'error': f'Post {codigo} no encontrado'}), 404
@@ -2312,8 +2338,8 @@ def execute_create_post(tool_input):
         hora_display = datetime.now().strftime('%H:%M:%S')
         
         # Obtener posts existentes para calcular el número
-        posts = sheets_service.get_posts()
-        posts_hoy = [p for p in posts if p['codigo'].startswith(fecha_str)]
+        posts = db_service.get_all_posts()
+        posts_hoy = [p for p in posts if p.get('codigo', '').startswith(fecha_str)]
         numero = len(posts_hoy) + 1
         codigo = f"{fecha_str}-{numero}"
         
@@ -2431,7 +2457,7 @@ def execute_create_post(tool_input):
 def execute_list_posts():
     """Ejecuta la herramienta list_posts"""
     try:
-        posts = sheets_service.get_posts()
+        posts = db_service.get_all_posts()
         
         # Formatear lista de posts
         posts_text = "\n".join([
@@ -2460,8 +2486,7 @@ def execute_update_image_prompt(tool_input):
         print(f"🎨 Actualizando prompt de imagen para post {codigo}")
         
         # 1. Obtener post
-        posts = sheets_service.get_posts()
-        post = next((p for p in posts if p['codigo'] == codigo), None)
+        post = db_service.get_post_by_codigo(codigo)
         
         if not post:
             return {
@@ -2519,8 +2544,7 @@ def execute_update_video_script(tool_input):
         print(f"🎬 Actualizando script de video para post {codigo}")
         
         # 1. Obtener post
-        posts = sheets_service.get_posts()
-        post = next((p for p in posts if p['codigo'] == codigo), None)
+        post = db_service.get_post_by_codigo(codigo)
         
         if not post:
             return {
@@ -2578,8 +2602,7 @@ def execute_regenerate_image(tool_input):
         print(f"🔄 Regenerando imagen para post {codigo}")
         
         # 1. Obtener post
-        posts = sheets_service.get_posts()
-        post = next((p for p in posts if p['codigo'] == codigo), None)
+        post = db_service.get_post_by_codigo(codigo)
         
         if not post:
             return {
@@ -2703,8 +2726,7 @@ def improve_prompt_visual():
         print(f"🎯 Selecciones: {selections}")
         
         # Obtener post y carpetas
-        posts = sheets_service.get_posts()
-        post = next((p for p in posts if p['codigo'] == codigo), None)
+        post = db_service.get_post_by_codigo(codigo)
         
         if not post or not post.get('drive_folder_id'):
             return jsonify({'error': 'Post no encontrado o sin carpeta en Drive'}), 404
@@ -3487,9 +3509,8 @@ def generate_instructions_from_post():
         print(f"\n📋 === GENERANDO INSTRUCCIONES DESDE POST ===")
         print(f"📝 Código: {codigo}")
         
-        # Obtener post
-        posts = sheets_service.get_posts()
-        post = next((p for p in posts if p['codigo'] == codigo), None)
+        # Obtener post de MySQL
+        post = db_service.get_post_by_codigo(codigo)
         
         if not post:
             return jsonify({'error': f'Post {codigo} no encontrado'}), 404
