@@ -232,11 +232,35 @@ def get_all_social_tokens() -> List[Dict]:
     finally:
         db.close()
 
-def save_social_token(platform: str, access_token: str, refresh_token: str = None, 
-                     expires_at: datetime = None, username: str = None) -> Dict:
-    """Guarda o actualiza un token de red social"""
+def save_social_token(platform: str, token_data: Dict = None, access_token: str = None, 
+                     refresh_token: str = None, expires_at: datetime = None, username: str = None) -> Dict:
+    """
+    Guarda o actualiza un token de red social
+    
+    Args:
+        platform: Plataforma (instagram, linkedin, etc.)
+        token_data: Dict completo con todos los datos (nuevo formato)
+        access_token: Token de acceso (formato legacy)
+        refresh_token: Token de refresco (formato legacy)
+        expires_at: Fecha de expiración (formato legacy)
+        username: Nombre de usuario (formato legacy)
+    """
     db = SessionLocal()
     try:
+        # Si se pasa token_data (nuevo formato), usarlo
+        if token_data:
+            access_token = token_data.get('access_token')
+            refresh_token = token_data.get('refresh_token')
+            expires_at_str = token_data.get('expires_at')
+            username = token_data.get('username')
+            
+            # Convertir string ISO a datetime si es necesario
+            if expires_at_str and isinstance(expires_at_str, str):
+                from datetime import datetime
+                expires_at = datetime.fromisoformat(expires_at_str)
+            else:
+                expires_at = expires_at_str
+        
         token = db.query(SocialToken).filter(SocialToken.platform == platform).first()
         
         if token:
@@ -293,3 +317,21 @@ def delete_social_token(platform: str) -> bool:
         raise e
     finally:
         db.close()
+
+def get_social_tokens() -> Dict:
+    """Obtiene todos los tokens organizados por plataforma"""
+    tokens_list = get_all_social_tokens()
+    tokens_dict = {}
+    
+    for token in tokens_list:
+        platform = token['platform']
+        tokens_dict[platform] = {
+            'access_token': token['access_token'],
+            'refresh_token': token['refresh_token'],
+            'expires_at': token['expires_at'],
+            'username': token['username'],
+            'connected_at': token.get('connected_at'),
+            'last_used': token.get('last_used')
+        }
+    
+    return tokens_dict

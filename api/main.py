@@ -29,13 +29,14 @@ falai_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'fala
 # (para que /api/* tenga prioridad sobre archivos estáticos)
 
 # Incluir routers
-from routers import posts, files, content, images, videos, validation
+from routers import posts, files, content, images, videos, validation, social
 app.include_router(posts.router)
 app.include_router(files.router)
 app.include_router(content.router)
 app.include_router(images.router)
 app.include_router(videos.router)
 app.include_router(validation.router)
+app.include_router(social.router)
 
 # Servir archivos estáticos del panel (CSS, JS, etc)
 # Montar DESPUÉS de los routers para que /api/* tenga prioridad
