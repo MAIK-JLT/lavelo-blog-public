@@ -11,6 +11,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from models.post import Post, PostCreate, PostUpdate
 from services.post_service import PostService
+from services.limits_service import limits_service
 
 router = APIRouter(
     prefix="/api/posts",
@@ -68,13 +69,30 @@ async def get_post(codigo: str):
         )
 
 @router.post("/", response_model=dict)
-async def create_post(post: PostCreate):
+async def create_post(post: PostCreate, request: Request):
     """
     Crea un nuevo post
     
     Usado por: Panel web (botón crear), MCP
+    Verifica límites según tier del usuario
     """
     try:
+        # Obtener user_id de sesión (si está logueado)
+        user_id = request.session.get('user_id')
+        
+        # Obtener IP del cliente (si es anónimo)
+        client_ip = request.client.host if not user_id else None
+        
+        # Verificar límite de creación
+        limit_check = limits_service.check_create_limit(user_id=user_id, client_ip=client_ip)
+        
+        if not limit_check['allowed']:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=limit_check['message']
+            )
+        
+        # Crear post
         result = await post_service.create_post(
             titulo=post.titulo,
             categoria=post.categoria,
@@ -82,7 +100,13 @@ async def create_post(post: PostCreate):
             fecha_programada=str(post.fecha_programada) if post.fecha_programada else None,
             hora_programada=post.hora_programada
         )
+        
+        # Agregar mensaje de límite a la respuesta
+        result['limit_info'] = limit_check['message']
+        
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

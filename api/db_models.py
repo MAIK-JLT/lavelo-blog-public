@@ -123,11 +123,72 @@ class Post(Base):
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
 
+class User(Base):
+    """Modelo de Usuario (autenticación con Instagram/Facebook)"""
+    __tablename__ = 'users'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    instagram_id = Column(String(255), unique=True, nullable=True)  # ID único de Instagram
+    instagram_username = Column(String(255))
+    facebook_id = Column(String(255), unique=True, nullable=True)  # ID único de Facebook
+    facebook_name = Column(String(255))
+    
+    # Tier y límites
+    tier = Column(String(20), default='free')  # 'free', 'premium'
+    posts_published_total = Column(Integer, default=0)  # Total de posts publicados
+    
+    # Stripe (para premium)
+    stripe_customer_id = Column(String(255), nullable=True)
+    stripe_subscription_id = Column(String(255), nullable=True)
+    subscription_status = Column(String(50), nullable=True)  # 'active', 'canceled', 'past_due'
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_login = Column(DateTime, default=datetime.utcnow)
+    
+    def to_dict(self):
+        """Convierte el objeto a diccionario"""
+        return {
+            'id': self.id,
+            'instagram_id': self.instagram_id,
+            'instagram_username': self.instagram_username,
+            'facebook_id': self.facebook_id,
+            'facebook_name': self.facebook_name,
+            'tier': self.tier,
+            'posts_published_total': self.posts_published_total,
+            'stripe_customer_id': self.stripe_customer_id,
+            'subscription_status': self.subscription_status,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'last_login': self.last_login.isoformat() if self.last_login else None
+        }
+
+class AnonymousUsage(Base):
+    """Modelo para tracking de usuarios anónimos por IP"""
+    __tablename__ = 'anonymous_usage'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    ip_address = Column(String(45), nullable=False)  # IPv4 o IPv6
+    posts_created_today = Column(Integer, default=0)
+    last_post_date = Column(Date, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    def to_dict(self):
+        """Convierte el objeto a diccionario"""
+        return {
+            'id': self.id,
+            'ip_address': self.ip_address,
+            'posts_created_today': self.posts_created_today,
+            'last_post_date': self.last_post_date.isoformat() if self.last_post_date else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
 class SocialToken(Base):
-    """Modelo de Tokens de Redes Sociales"""
+    """Modelo de Tokens de Redes Sociales (por usuario)"""
     __tablename__ = 'social_tokens'
     
-    platform = Column(String(50), primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, nullable=False)  # Relación con User
+    platform = Column(String(50), nullable=False)  # 'instagram', 'facebook', etc.
     access_token = Column(Text, nullable=False)
     refresh_token = Column(Text)
     expires_at = Column(DateTime)
@@ -138,6 +199,8 @@ class SocialToken(Base):
     def to_dict(self):
         """Convierte el objeto a diccionario"""
         return {
+            'id': self.id,
+            'user_id': self.user_id,
             'platform': self.platform,
             'access_token': self.access_token,
             'refresh_token': self.refresh_token,

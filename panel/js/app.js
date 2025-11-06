@@ -8,7 +8,14 @@ let currentPostIndex = 0;
 // ============================================
 // INICIALIZACIÓN
 // ============================================
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    // Verificar autenticación primero
+    const isAuthenticated = await checkAuth();
+    if (!isAuthenticated) {
+        window.location.href = '/login.html';
+        return;
+    }
+    
     // Restaurar índice del post si viene de details
     const savedIndex = localStorage.getItem('currentPostIndex');
     if (savedIndex !== null) {
@@ -21,6 +28,26 @@ document.addEventListener('DOMContentLoaded', () => {
     loadPostData();
     setTimeout(() => addPostSelector(), 1000);
 });
+
+// Verificar si el usuario está autenticado
+async function checkAuth() {
+    try {
+        const response = await fetch(`${API_BASE}/social/me`, { 
+            credentials: 'include' 
+        });
+        
+        if (response.status === 401) {
+            return false;
+        }
+        
+        const user = await response.json();
+        console.log('✅ Usuario autenticado:', user);
+        return true;
+    } catch (error) {
+        console.error('Error verificando autenticación:', error);
+        return false;
+    }
+}
 
 // ============================================
 // CARGAR DATOS

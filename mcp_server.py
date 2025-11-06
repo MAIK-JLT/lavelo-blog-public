@@ -12,7 +12,7 @@ from typing import Optional
 from mcp.server.models import InitializationOptions
 from mcp.server import NotificationOptions, Server
 from mcp.server.stdio import stdio_server
-from mcp.types import Tool, TextContent
+from mcp.types import Tool, TextContent, Resource
 
 # Agregar path para importar servicios
 sys.path.append(os.path.join(os.path.dirname(__file__), 'api'))
@@ -285,6 +285,57 @@ async def handle_list_tools() -> list[Tool]:
         )
     ]
 
+# ============================================
+# RESOURCES - Documentación
+# ============================================
+
+@server.list_resources()
+async def handle_list_resources() -> list[Resource]:
+    """Lista recursos disponibles (documentación)"""
+    return [
+        Resource(
+            uri="file:///ESTADOS_WORKFLOW.md",
+            name="Estados del Workflow",
+            description="Documentación completa de todos los estados del sistema (BASE_TEXT_AWAITING, IMAGE_BASE_AWAITING, etc.) con archivos necesarios y acciones para cada fase",
+            mimeType="text/markdown"
+        ),
+        Resource(
+            uri="file:///README.md",
+            name="README del Proyecto",
+            description="Documentación principal del proyecto Lavelo Blog - arquitectura, estructura y guía completa",
+            mimeType="text/markdown"
+        )
+    ]
+
+@server.read_resource()
+async def handle_read_resource(uri: str) -> str:
+    """Lee el contenido de un resource"""
+    logger.info(f"📖 Leyendo resource: {uri}")
+    
+    # Mapear URIs a rutas reales
+    base_path = os.path.dirname(__file__)
+    
+    if uri == "file:///ESTADOS_WORKFLOW.md":
+        file_path = os.path.join(base_path, "ESTADOS_WORKFLOW.md")
+    elif uri == "file:///README.md":
+        file_path = os.path.join(base_path, "README.md")
+    else:
+        raise ValueError(f"Resource no encontrado: {uri}")
+    
+    # Leer archivo
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Archivo no encontrado: {file_path}")
+    
+    with open(file_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+    
+    logger.info(f"✅ Resource leído: {len(content)} caracteres")
+    return content
+
+# ============================================
+# TOOLS - Handlers
+# ============================================
+
 @server.call_tool()
 async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
     """Ejecuta una herramienta"""
@@ -377,13 +428,35 @@ async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
         elif name == "get_post":
             post = await post_service.get_post(arguments['codigo'])
             if post:
-                return [TextContent(
-                    type="text",
-                    text=f"Post: {post['codigo']}\n" +
-                         f"Título: {post['titulo']}\n" +
-                         f"Estado: {post['estado']}\n" +
-                         f"Creado: {post.get('fecha_creacion', 'N/A')}"
-                )]
+                archivos = post.get('archivos', {})
+                
+                response = f"📋 Post: {post['codigo']}\n"
+                response += f"📝 Título: {post['titulo']}\n"
+                response += f"📊 Estado: {post['estado']}\n"
+                response += f"📂 Categoría: {post.get('categoria', 'N/A')}\n"
+                response += f"📅 Creado: {post.get('fecha_creacion', 'N/A')}\n\n"
+                
+                # Archivos disponibles
+                response += "📁 Archivos disponibles:\n\n"
+                
+                if archivos.get('textos'):
+                    response += f"📄 Textos ({len(archivos['textos'])}):\n"
+                    for archivo in archivos['textos']:
+                        response += f"  • {archivo}\n"
+                    response += "\n"
+                
+                if archivos.get('imagenes'):
+                    response += f"🖼️  Imágenes ({len(archivos['imagenes'])}):\n"
+                    for archivo in archivos['imagenes']:
+                        response += f"  • {archivo}\n"
+                    response += "\n"
+                
+                if archivos.get('videos'):
+                    response += f"🎬 Videos ({len(archivos['videos'])}):\n"
+                    for archivo in archivos['videos']:
+                        response += f"  • {archivo}\n"
+                
+                return [TextContent(type="text", text=response)]
             else:
                 return [TextContent(type="text", text=f"❌ Post {arguments['codigo']} no encontrado")]
         
@@ -464,13 +537,13 @@ async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
         elif name == "generate_instructions_from_post":
             codigo = arguments['codigo']
             
-            logger.info(f"🎨 Generando instrucciones de imagen para {codigo}...")
-            result = await content_service.generate_image_instructions(codigo)
+            logger.info(f"🎨 Generando prompt de imagen para {codigo}...")
+            result = await content_service.generate_image_prompt(codigo)
             
             if result.get('success'):
                 return [TextContent(
                     type="text",
-                    text=f"✅ Instrucciones generadas:\n\n{result.get('instructions')}"
+                    text=f"✅ Prompt generado:\n\n{result.get('prompt')}"
                 )]
             else:
                 return [TextContent(type="text", text=f"❌ Error: {result.get('error')}")]
@@ -480,12 +553,12 @@ async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
             
             logger.info(f"🚀 Generando prompt + imágenes completo para {codigo}...")
             
-            # Paso 1: Generar instrucciones
-            instructions_result = await content_service.generate_image_instructions(codigo)
-            if not instructions_result.get('success'):
-                return [TextContent(type="text", text=f"❌ Error generando prompt: {instructions_result.get('error')}")]
+            # Paso 1: Generar prompt
+            prompt_result = await content_service.generate_image_prompt(codigo)
+            if not prompt_result.get('success'):
+                return [TextContent(type="text", text=f"❌ Error generando prompt: {prompt_result.get('error')}")]
             
-            prompt = instructions_result.get('instructions')
+            prompt = prompt_result.get('prompt')
             
             # Paso 2: Generar imágenes
             images_result = await image_service.generate_image(codigo, num_images=4)

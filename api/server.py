@@ -1,11 +1,23 @@
 import os
 import time
 import json
+import logging
 from datetime import datetime
 from flask import Flask, request, jsonify, session, redirect, url_for
 from flask_cors import CORS
 from flasgger import Swagger, swag_from
 from dotenv import load_dotenv
+
+# Configurar logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),  # Console
+        logging.FileHandler('/tmp/lavelo_api.log')  # Archivo
+    ]
+)
+logger = logging.getLogger(__name__)
 
 # Cargar variables de entorno ANTES de importar sheets_service
 env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
@@ -81,6 +93,21 @@ swagger_template = {
 }
 
 swagger = Swagger(app, config=swagger_config, template=swagger_template)
+
+logger.info("🚀 Lavelo Blog API iniciada")
+logger.info(f"📁 Directorio de trabajo: {os.getcwd()}")
+logger.info(f"🔑 FAL_KEY configurado: {'✅' if os.getenv('FAL_KEY') else '❌'}")
+logger.info(f"🔑 ANTHROPIC_API_KEY configurado: {'✅' if os.getenv('ANTHROPIC_API_KEY') else '❌'}")
+
+# Middleware para loggear todas las requests
+@app.before_request
+def log_request():
+    logger.info(f"📥 {request.method} {request.path}")
+
+@app.after_request
+def log_response(response):
+    logger.info(f"📤 {request.method} {request.path} → {response.status_code}")
+    return response
 
 # Servir archivos de la carpeta falai
 from flask import send_from_directory

@@ -216,6 +216,7 @@ Genera SOLO el texto adaptado, sin explicaciones ni metadatos."""
         
         Usado por:
         - Panel Web: Validar Fase 2 (ADAPTED_TEXTS_AWAITING)
+        - MCP: generate_instructions_from_post
         """
         # Leer base.txt
         base_text = self.file_service.read_file(codigo, 'textos', f"{codigo}_base.txt")

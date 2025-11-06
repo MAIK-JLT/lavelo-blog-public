@@ -36,14 +36,36 @@ class PostService:
     
     async def get_post(self, codigo: str) -> Optional[Dict]:
         """
-        Obtiene un post por código
+        Obtiene un post por código con información de archivos
         
         Usado por:
         - Panel Web: Cargar detalles
         - MCP: get_post()
         - API: GET /api/posts/{codigo}
         """
-        return db_service.get_post_by_codigo(codigo)
+        post = db_service.get_post_by_codigo(codigo)
+        if not post:
+            return None
+        
+        # Agregar información de archivos disponibles
+        import os
+        storage_path = os.path.join(os.path.dirname(__file__), '..', '..', 'storage', 'posts', codigo)
+        
+        archivos_disponibles = {
+            'textos': [],
+            'imagenes': [],
+            'videos': []
+        }
+        
+        # Listar archivos si existen
+        for tipo in ['textos', 'imagenes', 'videos']:
+            tipo_path = os.path.join(storage_path, tipo)
+            if os.path.exists(tipo_path):
+                archivos_disponibles[tipo] = os.listdir(tipo_path)
+        
+        post['archivos'] = archivos_disponibles
+        
+        return post
     
     async def create_post(
         self,

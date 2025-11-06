@@ -25,6 +25,37 @@ class TokenData(BaseModel):
     username: str
     user_id: str = None
 
+@router.get("/me")
+async def get_current_user(request: Request):
+    """
+    Obtiene información del usuario logueado
+    
+    Usado por: Panel web (verificar si está logueado)
+    """
+    user_id = request.session.get('user_id')
+    
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No autenticado"
+        )
+    
+    return {
+        'user_id': user_id,
+        'platform': request.session.get('platform'),
+        'username': request.session.get('username')
+    }
+
+@router.post("/logout")
+async def logout(request: Request):
+    """
+    Cierra sesión del usuario
+    
+    Usado por: Panel web
+    """
+    request.session.clear()
+    return {'success': True, 'message': 'Sesión cerrada'}
+
 @router.get("/status")
 async def get_social_status():
     """
@@ -77,13 +108,14 @@ async def connect_social_platform(platform: str, request: Request):
         )
 
 @router.get("/callback/{platform}")
-async def social_callback(platform: str, code: str, state: str, request: Request):
+async def social_callback(platform: str, code: str, state: str = None, request: Request = None):
     """
     Callback OAuth para recibir tokens
     
     La plataforma redirige aquí después de que el usuario autoriza
+    Este callback también LOGUEA al usuario (crea sesión)
     
-    Usado por: OAuth flow
+    Usado por: OAuth flow + Login
     """
     try:
         # Construir redirect_uri (debe ser el mismo que en connect)
@@ -95,23 +127,99 @@ async def social_callback(platform: str, code: str, state: str, request: Request
         
         if not token_data:
             return RedirectResponse(
-                url=f"/panel/social_connect.html?error=token_exchange_failed&platform={platform}"
+                url=f"/panel/?error=token_exchange_failed&platform={platform}"
             )
         
-        # Guardar token en BD
-        db_service.save_social_token(platform, token_data)
+        # Obtener info del usuario de la plataforma
+        user_info = social_service.get_user_info(platform, token_data['access_token'])
         
-        print(f"✅ {platform} conectado exitosamente")
+        if not user_info:
+            return RedirectResponse(
+                url=f"/panel/?error=user_info_failed&platform={platform}"
+            )
         
-        # Redirigir al panel con éxito
-        return RedirectResponse(
-            url=f"/panel/social_connect.html?success=true&platform={platform}"
-        )
+        # Crear o actualizar usuario en BD
+        from database import SessionLocal
+        from db_models import User, SocialToken
+        from datetime import datetime
+        
+        db = SessionLocal()
+        try:
+            # Buscar usuario existente por platform_id
+            if platform == 'instagram':
+                user = db.query(User).filter(User.instagram_id == user_info['id']).first()
+                if not user:
+                    user = User(
+                        instagram_id=user_info['id'],
+                        instagram_username=user_info.get('username')
+                    )
+                    db.add(user)
+                    db.commit()
+                    db.refresh(user)
+                else:
+                    user.instagram_username = user_info.get('username')
+                    user.last_login = datetime.utcnow()
+                    db.commit()
+            
+            elif platform == 'facebook':
+                user = db.query(User).filter(User.facebook_id == user_info['id']).first()
+                if not user:
+                    user = User(
+                        facebook_id=user_info['id'],
+                        facebook_name=user_info.get('name')
+                    )
+                    db.add(user)
+                    db.commit()
+                    db.refresh(user)
+                else:
+                    user.facebook_name = user_info.get('name')
+                    user.last_login = datetime.utcnow()
+                    db.commit()
+            
+            # Guardar/actualizar token
+            token = db.query(SocialToken).filter(
+                SocialToken.user_id == user.id,
+                SocialToken.platform == platform
+            ).first()
+            
+            if token:
+                token.access_token = token_data['access_token']
+                token.refresh_token = token_data.get('refresh_token')
+                token.expires_at = token_data.get('expires_at')
+                token.username = user_info.get('username') or user_info.get('name')
+                token.last_used = datetime.utcnow()
+            else:
+                token = SocialToken(
+                    user_id=user.id,
+                    platform=platform,
+                    access_token=token_data['access_token'],
+                    refresh_token=token_data.get('refresh_token'),
+                    expires_at=token_data.get('expires_at'),
+                    username=user_info.get('username') or user_info.get('name')
+                )
+                db.add(token)
+            
+            db.commit()
+            
+            # Crear sesión (LOGIN)
+            request.session['user_id'] = user.id
+            request.session['platform'] = platform
+            request.session['username'] = user_info.get('username') or user_info.get('name')
+            
+            print(f"✅ Usuario {user.id} logueado con {platform}")
+            
+            # Redirigir al panel (ya logueado)
+            return RedirectResponse(url="/panel/")
+            
+        finally:
+            db.close()
         
     except Exception as e:
         print(f"❌ Error en callback OAuth: {e}")
+        import traceback
+        traceback.print_exc()
         return RedirectResponse(
-            url=f"/panel/social_connect.html?error=callback_failed&platform={platform}"
+            url=f"/panel/?error=callback_failed&platform={platform}"
         )
 
 @router.post("/refresh/{platform}")

@@ -1,8 +1,26 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from starlette.middleware.sessions import SessionMiddleware
+from dotenv import load_dotenv
 import os
+import logging
+import time
+
+# Cargar variables de entorno
+load_dotenv()
+
+# Configurar logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),  # Console
+        logging.FileHandler('/tmp/lavelo_api.log')  # Archivo
+    ]
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Lavelo Blog API",
@@ -10,6 +28,16 @@ app = FastAPI(
     version="2.0.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc"
+)
+
+# Session Middleware (debe ir ANTES de CORS)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production'),
+    session_cookie="lavelo_session",
+    max_age=30 * 24 * 60 * 60,  # 30 días
+    same_site="lax",
+    https_only=False  # True en producción
 )
 
 # CORS - Permitir todas las peticiones (ajustar en producción)
@@ -21,6 +49,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Middleware para logging de requests
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.time()
+    logger.info(f"📥 {request.method} {request.url.path}")
+    
+    response = await call_next(request)
+    
+    process_time = time.time() - start_time
+    logger.info(f"📤 {request.method} {request.url.path} → {response.status_code} ({process_time:.2f}s)")
+    
+    return response
+
 # Rutas absolutas para archivos estáticos
 panel_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'panel'))
 falai_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'falai'))
@@ -30,6 +71,11 @@ falai_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'fala
 
 # Incluir routers
 from routers import posts, files, content, images, videos, validation, social
+
+logger.info("🚀 Lavelo Blog API iniciada (FastAPI)")
+logger.info(f"📁 Panel path: {panel_path}")
+logger.info(f"📁 Falai path: {falai_path}")
+
 app.include_router(posts.router)
 app.include_router(files.router)
 app.include_router(content.router)
@@ -37,6 +83,8 @@ app.include_router(images.router)
 app.include_router(videos.router)
 app.include_router(validation.router)
 app.include_router(social.router)
+
+logger.info("✅ Todos los routers registrados")
 
 # Servir archivos estáticos del panel (CSS, JS, etc)
 # Montar DESPUÉS de los routers para que /api/* tenga prioridad

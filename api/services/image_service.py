@@ -133,10 +133,14 @@ class ImageService:
                 
                 print(f"  💾 Guardada: {filename}")
         
-        # 7. Actualizar checkbox en BD
+        # 7. Actualizar checkbox y estado en BD
         if generated_images:
-            db_service.update_post(codigo, {'imagen_base_png': True})
+            db_service.update_post(codigo, {
+                'imagen_base_png': True,
+                'estado': 'IMAGE_FORMATS_AWAITING'
+            })
             print(f"✅ Checkbox imagen_base actualizado")
+            print(f"✅ Estado actualizado a IMAGE_FORMATS_AWAITING")
         
         return {
             'success': True,

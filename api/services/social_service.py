@@ -181,24 +181,37 @@ class SocialService:
             
             # Calcular expiración
             expires_in = token_data.get('expires_in', 3600)
-            expires_at = (datetime.now() + timedelta(seconds=expires_in)).isoformat()
+            expires_at = datetime.now() + timedelta(seconds=expires_in)
             
             return {
                 'access_token': token_data['access_token'],
                 'refresh_token': token_data.get('refresh_token'),
-                'expires_at': expires_at,
+                'expires_at': expires_at,  # datetime object, no string
                 'username': user_info.get('username', 'N/A'),
                 'user_id': user_info.get('id'),
-                'connected_at': datetime.now().isoformat()
+                'connected_at': datetime.now()  # datetime object, no string
             }
             
         except Exception as e:
             print(f"❌ Error intercambiando token: {e}")
             return None
     
+    def get_user_info(self, platform: str, access_token: str) -> Dict:
+        """
+        Obtiene información del usuario desde la API (público)
+        
+        Args:
+            platform: Plataforma
+            access_token: Token de acceso
+            
+        Returns:
+            Dict con info del usuario
+        """
+        return self._get_user_info(platform, access_token)
+    
     def _get_user_info(self, platform: str, access_token: str) -> Dict:
         """
-        Obtiene información del usuario desde la API
+        Obtiene información del usuario desde la API (interno)
         
         Args:
             platform: Plataforma

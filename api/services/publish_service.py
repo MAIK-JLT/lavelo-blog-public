@@ -10,22 +10,34 @@ from typing import Dict, Optional
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 import db_service
 from services.file_service import file_service
+from services.limits_service import limits_service
 
 class PublishService:
     """Servicio para publicar contenido en redes sociales"""
     
-    def publish_to_instagram(self, codigo: str, caption: str = None) -> Dict:
+    def publish_to_instagram(self, codigo: str, caption: str = None, user_id: int = None) -> Dict:
         """
         Publica en Instagram
         
         Args:
             codigo: Código del post
+            user_id: ID del usuario (para verificar límites)
             caption: Texto del post (opcional, usa instagram.txt si no se proporciona)
             
         Returns:
             Dict con success y post_id o error
         """
         try:
+            # Verificar límite de publicación
+            if user_id:
+                limit_check = limits_service.check_publish_limit(user_id)
+                if not limit_check['allowed']:
+                    return {
+                        'success': False,
+                        'error': limit_check['message'],
+                        'upgrade_required': limit_check.get('upgrade_required', False)
+                    }
+            
             # Obtener token
             tokens = db_service.get_social_tokens()
             if 'instagram' not in tokens or not tokens['instagram']:
@@ -83,6 +95,10 @@ class PublishService:
             
             post_id = response.json()['id']
             print(f"🎉 Publicado en Instagram: {post_id}")
+            
+            # Incrementar contador de publicaciones
+            if user_id:
+                limits_service.increment_publish_count(user_id)
             
             return {
                 'success': True,
