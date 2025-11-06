@@ -40,10 +40,22 @@ app.add_middleware(
     https_only=False  # True en producción
 )
 
-# CORS - Permitir todas las peticiones (ajustar en producción)
+# CORS - Configuración según entorno
+ENVIRONMENT = os.getenv('ENVIRONMENT', 'development')
+if ENVIRONMENT == 'production':
+    allowed_origins = [
+        "https://blog.lavelo.es",
+        "https://www.blog.lavelo.es"
+    ]
+else:
+    allowed_origins = [
+        "http://localhost:5001",
+        "http://127.0.0.1:5001"
+    ]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
