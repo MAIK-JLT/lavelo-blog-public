@@ -64,8 +64,8 @@ async def get_social_status():
     Usado por: Panel web (social_connect.html)
     """
     try:
-        status = social_service.get_status()
-        return status
+        social_status = social_service.get_status()
+        return social_status
     except Exception as e:
         print(f"❌ Error obteniendo estado social: {e}")
         raise HTTPException(
