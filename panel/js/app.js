@@ -4,8 +4,8 @@
 // Detectar si estamos en producción o desarrollo
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
 
-// API en el mismo servidor (producción) o localhost (desarrollo)
-const API_BASE = isProduction ? 'http://blog.lavelo.es:5001/api' : 'http://localhost:5001/api';
+// API a través de proxy nginx (producción) o localhost (desarrollo)
+const API_BASE = isProduction ? '/api' : 'http://localhost:5001/api';
 
 // MODO DESARROLLO: Deshabilitar autenticación temporalmente
 const REQUIRE_AUTH = false; // Cambiar a true cuando OAuth esté configurado
