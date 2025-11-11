@@ -1,7 +1,15 @@
 // ============================================
 // CONFIGURACIÓN
 // ============================================
-const API_BASE = 'http://localhost:5001/api';
+// Detectar si estamos en producción o desarrollo
+const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+
+// API en Railway (producción) o localhost (desarrollo)
+const API_BASE = isProduction ? 'https://lavelo-blog-public-production.up.railway.app/api' : 'http://localhost:5001/api';
+
+// MODO DESARROLLO: Deshabilitar autenticación temporalmente
+const REQUIRE_AUTH = false; // Cambiar a true cuando OAuth esté configurado
+
 let currentPost = null;
 let currentPostIndex = 0;
 
@@ -9,11 +17,13 @@ let currentPostIndex = 0;
 // INICIALIZACIÓN
 // ============================================
 document.addEventListener('DOMContentLoaded', async () => {
-    // Verificar autenticación primero
-    const isAuthenticated = await checkAuth();
-    if (!isAuthenticated) {
-        window.location.href = '/login.html';
-        return;
+    // Verificar autenticación solo si está habilitada
+    if (REQUIRE_AUTH) {
+        const isAuthenticated = await checkAuth();
+        if (!isAuthenticated) {
+            window.location.href = '/panel/login.html';
+            return;
+        }
     }
     
     // Restaurar índice del post si viene de details
