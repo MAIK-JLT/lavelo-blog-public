@@ -8,7 +8,7 @@
 
 ## 🚀 Pasos:
 
-### 1️⃣ Obtener ID de Carpeta Drive
+### 1️⃣ Obtener ID de Carpeta Drive..
 
 1. **Abre:** https://drive.google.com/
 2. **Navega** a tu carpeta "Posts" o "Lavelo Blog Content"
