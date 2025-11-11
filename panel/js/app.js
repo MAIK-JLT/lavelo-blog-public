@@ -5,6 +5,7 @@
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
 
 // API a través de proxy nginx (producción) o localhost (desarrollo)
+// IMPORTANTE: FastAPI requiere barra final en las rutas
 const API_BASE = isProduction ? '/api' : 'http://localhost:5001/api';
 
 // MODO DESARROLLO: Deshabilitar autenticación temporalmente
@@ -64,7 +65,7 @@ async function checkAuth() {
 // ============================================
 async function loadPostData() {
     try {
-        const response = await fetch(`${API_BASE}/posts`, { credentials: 'include' });
+        const response = await fetch(`${API_BASE}/posts/`, { credentials: 'include' });
         const result = await response.json();
         
         if (result.error) {
@@ -274,7 +275,7 @@ async function validatePhase() {
         // Obtener redes seleccionadas
         const selectedNetworks = getSelectedNetworks();
         
-        const response = await fetch(`${API_BASE}/validate-phase`, {
+        const response = await fetch(`${API_BASE}/validate-phase/`, {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
@@ -503,7 +504,7 @@ async function onNetworkChange() {
     console.log('📱 Guardando configuración de redes:', networks);
     
     try {
-        const response = await fetch(`${API_BASE}/posts/${currentPost.codigo}/update-networks`, {
+        const response = await fetch(`${API_BASE}/posts/${currentPost.codigo}/update-networks/`, {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
@@ -579,7 +580,7 @@ async function deletePost() {
     }
     
     try {
-        const response = await fetch(`${API_BASE}/posts/${currentPost.codigo}/delete`, {
+        const response = await fetch(`${API_BASE}/posts/${currentPost.codigo}/delete/`, {
             method: 'DELETE',
             credentials: 'include'
         });
