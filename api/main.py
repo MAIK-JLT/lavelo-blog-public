@@ -45,12 +45,15 @@ ENVIRONMENT = os.getenv('ENVIRONMENT', 'development')
 if ENVIRONMENT == 'production':
     allowed_origins = [
         "https://blog.lavelo.es",
-        "https://www.blog.lavelo.es"
+        "https://www.blog.lavelo.es",
+        "https://lavelo-blog-public-production.up.railway.app"
     ]
 else:
     allowed_origins = [
         "http://localhost:5001",
-        "http://127.0.0.1:5001"
+        "http://127.0.0.1:5001",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000"
     ]
 
 app.add_middleware(
