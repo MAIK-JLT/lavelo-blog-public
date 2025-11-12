@@ -764,7 +764,7 @@ function volverAlPanel() {
     const posts = JSON.parse(localStorage.getItem('posts') || '[]');
     const postIndex = posts.findIndex(p => p.codigo === codigo);
     localStorage.setItem('currentPostIndex', postIndex >= 0 ? postIndex : 0);
-    window.location.href = '/';
+    window.location.href = '/panel/';
 }
 
 // Utilidades UI
@@ -1174,7 +1174,7 @@ function showEditWarning(estado) {
 function cancelWarning() {
     document.getElementById('warning-modal').style.display = 'none';
     // Volver al panel principal
-    window.location.href = '/';
+    window.location.href = '/panel/';
 }
 
 // Confirmar edición
