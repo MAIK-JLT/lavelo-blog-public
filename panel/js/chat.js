@@ -71,13 +71,32 @@ async function sendChatMessage() {
             
             // Si se usó una herramienta, recargar según el tipo
             if (data.tool_used === 'create_post') {
-                setTimeout(() => {
-                    if (typeof loadPostData === 'function') {
-                        loadPostData(); // Recargar datos y actualizar selector
-                    } else {
-                        location.reload(); // Fallback: recargar página completa
+                addMessage('assistant', '🔄 Recargando panel para mostrar el nuevo post...');
+                setTimeout(async () => {
+                    try {
+                        // Recargar lista de posts
+                        const response = await fetch(`${API_BASE}/posts/`, { credentials: 'include' });
+                        const result = await response.json();
+                        const posts = result.posts || result;
+                        
+                        // Guardar en localStorage
+                        localStorage.setItem('posts', JSON.stringify(posts));
+                        
+                        // Seleccionar el último post (el recién creado)
+                        currentPostIndex = 0;
+                        
+                        // Recargar vista
+                        if (typeof loadPostData === 'function') {
+                            await loadPostData();
+                            addMessage('assistant', '✅ Panel actualizado. Ahora puedes ver tu nuevo post.');
+                        } else {
+                            location.reload();
+                        }
+                    } catch (error) {
+                        console.error('Error recargando:', error);
+                        location.reload();
                     }
-                }, 1000);
+                }, 1500);
             } else if (data.tool_used === 'regenerate_image') {
                 // Regenerar imagen: volver al panel principal
                 addMessage('assistant', '🎯 Volviendo al panel principal para regenerar...');
