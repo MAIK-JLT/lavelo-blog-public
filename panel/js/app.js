@@ -275,7 +275,7 @@ async function validatePhase() {
         // Obtener redes seleccionadas
         const selectedNetworks = getSelectedNetworks();
         
-        const response = await fetch(`${API_BASE}/validate-phase/`, {
+        const response = await fetch(`${API_BASE}/validate-phase`, {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
