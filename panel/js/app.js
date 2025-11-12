@@ -433,7 +433,7 @@ function viewDetails(targetState) {
     if (post) {
         // Si se proporciona targetState, usarlo; si no, usar el estado actual del post
         const estado = targetState || post.estado;
-        window.location.href = `/details.html?codigo=${post.codigo}&estado=${estado}`;
+        window.location.href = `/panel/details.html?codigo=${post.codigo}&estado=${estado}`;
     }
 }
 
