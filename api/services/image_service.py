@@ -9,6 +9,19 @@ import json
 import base64
 import requests
 import fal_client
+import cloudinary
+import cloudinary.uploader
+from dotenv import load_dotenv
+
+# Cargar variables de entorno
+load_dotenv()
+
+# Configurar Cloudinary
+cloudinary.config(
+    cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
+    api_key=os.getenv('CLOUDINARY_API_KEY'),
+    api_secret=os.getenv('CLOUDINARY_API_SECRET')
+)
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 import db_service
@@ -151,65 +164,129 @@ class ImageService:
     
     async def format_images(self, codigo: str) -> Dict:
         """
-        Formatea imagen base para diferentes redes sociales
+        Formatea imagen base para diferentes redes sociales usando Cloudinary AI
+        (crop inteligente con detección de sujetos)
         
         Usado por:
         - Panel Web: Validar Fase 4 (IMAGE_BASE_AWAITING)
         """
-        from PIL import Image
+        import cloudinary
+        import cloudinary.uploader
         from io import BytesIO
+        import tempfile
+        import requests
         
-        # Leer imagen base
+        print(f"\n🖼️ === FORMATEANDO IMÁGENES CON CLOUDINARY AI ===")
+        
+        # 1. Leer imagen base
         base_filename = f"{codigo}_imagen_base.png"
         image_bytes = self.file_service.read_binary_file(codigo, 'imagenes', base_filename)
         
         if not image_bytes:
             raise Exception(f'Imagen base no encontrada: {base_filename}')
         
-        # Abrir imagen con Pillow
-        img = Image.open(BytesIO(image_bytes))
+        print(f"📥 Imagen base cargada: {len(image_bytes)} bytes")
         
-        # Formatos para redes sociales
-        formats = {
-            'instagram_1x1': (1080, 1080),
-            'instagram_stories_9x16': (1080, 1920),
-            'linkedin_16x9': (1200, 627),
-            'twitter_16x9': (1200, 675),
-            'facebook_16x9': (1200, 630)
-        }
+        # 2. Subir a Cloudinary
+        print(f"📤 Subiendo a Cloudinary...")
         
-        formatted = []
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp_file:
+            tmp_path = tmp_file.name
+            tmp_file.write(image_bytes)
         
-        for name, size in formats.items():
-            # Resize manteniendo aspecto y crop al centro
-            img_resized = img.copy()
-            img_resized.thumbnail(size, Image.Resampling.LANCZOS)
+        try:
+            upload_result = cloudinary.uploader.upload(
+                tmp_path,
+                resource_type='image',
+                public_id=f"lavelo_blog/{codigo}_imagen_base",
+                overwrite=True
+            )
             
-            # Crear imagen final con tamaño exacto
-            final_img = Image.new('RGB', size, (255, 255, 255))
-            offset = ((size[0] - img_resized.width) // 2, (size[1] - img_resized.height) // 2)
-            final_img.paste(img_resized, offset)
+            public_id = upload_result['public_id']
+            print(f"✅ Subida a Cloudinary: {public_id}")
             
-            # Guardar
-            output = BytesIO()
-            final_img.save(output, format='PNG')
-            output_bytes = output.getvalue()
+            # 3. Definir formatos con crop inteligente (gravity: auto:subject)
+            formats = {
+                'instagram_1x1': {
+                    'width': 1080, 'height': 1080,
+                    'crop': 'fill', 'gravity': 'auto:subject'
+                },
+                'instagram_stories_9x16': {
+                    'width': 1080, 'height': 1920,
+                    'crop': 'fill', 'gravity': 'auto:subject'
+                },
+                'linkedin_16x9': {
+                    'width': 1200, 'height': 627,
+                    'crop': 'fill', 'gravity': 'auto:subject'
+                },
+                'twitter_16x9': {
+                    'width': 1200, 'height': 675,
+                    'crop': 'fill', 'gravity': 'auto:subject'
+                },
+                'facebook_16x9': {
+                    'width': 1200, 'height': 630,
+                    'crop': 'fill', 'gravity': 'auto:subject'
+                }
+            }
             
-            filename = f"{codigo}_{name}.png"
-            self.file_service.save_binary_file(codigo, 'imagenes', filename, output_bytes)
+            formatted = []
             
-            # Actualizar checkbox en BD
-            checkbox_field = f'{name}_png'
-            db_service.update_post(codigo, {checkbox_field: True})
+            # 4. Generar cada formato
+            for name, specs in formats.items():
+                print(f"  🎨 Generando {name}...")
+                
+                try:
+                    # Generar transformación explícita en Cloudinary
+                    explicit_result = cloudinary.uploader.explicit(
+                        public_id,
+                        type='upload',
+                        resource_type='image',
+                        eager=[{
+                            'width': specs['width'],
+                            'height': specs['height'],
+                            'crop': specs['crop'],
+                            'gravity': specs['gravity'],
+                            'quality': 'auto:good',
+                            'fetch_format': 'auto'
+                        }]
+                    )
+                    
+                    # Obtener URL de la transformación
+                    transformed_url = explicit_result['eager'][0]['secure_url']
+                    
+                    # Descargar imagen transformada
+                    response = requests.get(transformed_url)
+                    transformed_bytes = response.content
+                    
+                    # Guardar en storage
+                    filename = f"{codigo}_{name}.png"
+                    self.file_service.save_binary_file(codigo, 'imagenes', filename, transformed_bytes)
+                    
+                    # Actualizar checkbox en BD
+                    checkbox_field = f'{name}_png'
+                    db_service.update_post(codigo, {checkbox_field: True})
+                    
+                    formatted.append(filename)
+                    print(f"    ✅ {filename} ({specs['width']}x{specs['height']})")
+                    
+                except Exception as e:
+                    print(f"    ❌ Error generando {name}: {e}")
             
-            formatted.append(filename)
-            print(f"  ✅ {filename} generado ({size[0]}x{size[1]})")
-        
-        return {
-            'success': True,
-            'formatted': formatted,
-            'message': f'✅ {len(formatted)} formatos generados'
-        }
+            # Limpiar archivo temporal
+            import os
+            os.unlink(tmp_path)
+            
+            return {
+                'success': True,
+                'formatted': formatted,
+                'message': f'✅ {len(formatted)} formatos generados con Cloudinary AI'
+            }
+            
+        except Exception as e:
+            import os
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+            raise Exception(f'Error en Cloudinary: {str(e)}')
     
     async def upload_manual_image(self, codigo: str, filename: str, image_bytes: bytes) -> Dict:
         """
