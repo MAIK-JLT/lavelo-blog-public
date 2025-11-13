@@ -115,9 +115,6 @@ class ImageService:
         if not result or 'images' not in result or len(result['images']) == 0:
             raise Exception('No se generaron imágenes')
         
-        # Verificar si ya existe imagen_base.png
-        base_exists = self.file_service.file_exists(codigo, 'imagenes', f"{codigo}_imagen_base.png")
-        
         generated_images = []
         
         for idx, image_data in enumerate(result['images'], 1):
@@ -129,12 +126,12 @@ class ImageService:
                 image_bytes = response.content
                 
                 # Guardar localmente
-                # Si ya existe imagen_base.png, guardar todas como variaciones (_2, _3, _4, _5)
-                if base_exists:
-                    filename = f"{codigo}_imagen_base_{idx + 1}.png"
+                # Primera imagen siempre como imagen_base.png (sobrescribe si existe)
+                # Resto como variaciones (_2, _3, _4)
+                if idx == 1:
+                    filename = f"{codigo}_imagen_base.png"
                 else:
-                    # Primera generación: guardar como _base.png, _base_2.png, etc.
-                    filename = f"{codigo}_imagen_base_{idx}.png" if idx > 1 else f"{codigo}_imagen_base.png"
+                    filename = f"{codigo}_imagen_base_{idx}.png"
                 
                 self.file_service.save_binary_file(codigo, 'imagenes', filename, image_bytes)
                 
