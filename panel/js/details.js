@@ -291,6 +291,9 @@ async function renderImageBasePhase() {
                     <h3>📸 Imagen Base (1024x1024)</h3>
                     <div style="text-align: center; padding: 20px;">
                         <img src="${imageUrl}" alt="Imagen base" style="max-width: 100%; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);" onerror="this.src=''; this.alt='Error cargando imagen';">
+                        <div style="margin-top: 15px;">
+                            <a href="${imageUrl}" download="${codigo}_imagen_base.png" class="ai-btn" style="display: inline-block; text-decoration: none;">⬇️ Descargar Imagen</a>
+                        </div>
                     </div>
                     <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
                         <h4 style="margin-bottom: 10px;">Prompt usado:</h4>
@@ -517,6 +520,9 @@ async function renderVideoBasePhase() {
                         <source src="/api/files/${codigo}/videos/${codigo}_video_base.mp4" type="video/mp4">
                         Tu navegador no soporta video.
                     </video>
+                    <div style="margin-top: 15px;">
+                        <a href="/api/files/${codigo}/videos/${codigo}_video_base.mp4" download="${codigo}_video_base.mp4" class="ai-btn" style="display: inline-block; text-decoration: none;">⬇️ Descargar Video</a>
+                    </div>
                 </div>
                 <p style="color: #666; font-size: 0.9em; text-align: center; margin-top: 10px;">Si el video es correcto, vuelve al panel y haz clic en VALIDATE para generar los formatos.</p>
             </div>
