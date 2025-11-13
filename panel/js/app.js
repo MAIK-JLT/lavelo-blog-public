@@ -109,9 +109,14 @@ function renderPostInfo(data) {
     postInfo.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
             <h2 style="margin: 0;">📄 ${data.titulo || 'Sin título'}</h2>
-            <button class="delete-post-btn" onclick="deletePost()" title="Eliminar este post">
-                🗑️ Eliminar Post
-            </button>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-primary" onclick="goToPublish()" title="Publicar en redes sociales">
+                    📤 Publicar Post
+                </button>
+                <button class="delete-post-btn" onclick="deletePost()" title="Eliminar este post">
+                    🗑️ Eliminar Post
+                </button>
+            </div>
         </div>
         <p><strong>Código:</strong> ${data.codigo}</p>
         <p><strong>Categoría:</strong> ${data.categoria || 'Sin categoría'}</p>
@@ -548,6 +553,20 @@ function getSelectedNetworks() {
     }
     
     return networks;
+}
+
+// ============================================
+// PUBLICAR POST
+// ============================================
+
+function goToPublish() {
+    if (!currentPost) {
+        showError('No hay post seleccionado');
+        return;
+    }
+    
+    // Redirigir a publish.html con el código del post
+    window.location.href = `publish.html?codigo=${currentPost.codigo}`;
 }
 
 // ============================================

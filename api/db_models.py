@@ -193,6 +193,8 @@ class SocialToken(Base):
     refresh_token = Column(Text)
     expires_at = Column(DateTime)
     username = Column(String(100))
+    page_id = Column(String(100))  # Para Facebook/Instagram Business
+    instagram_account_id = Column(String(100))  # Para Instagram Business
     connected_at = Column(DateTime, default=datetime.utcnow)
     last_used = Column(DateTime)
     
@@ -206,6 +208,8 @@ class SocialToken(Base):
             'refresh_token': self.refresh_token,
             'expires_at': self.expires_at.isoformat() if self.expires_at else None,
             'username': self.username,
+            'page_id': self.page_id,
+            'instagram_account_id': self.instagram_account_id,
             'connected_at': self.connected_at.isoformat() if self.connected_at else None,
             'last_used': self.last_used.isoformat() if self.last_used else None
         }

@@ -11,7 +11,11 @@ import os
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from services.social_service import social_service
+from services.publish_service import PublishService
 import db_service
+
+# Instancia del servicio de publicación
+publish_service = PublishService()
 
 router = APIRouter(
     prefix="/api/social",
@@ -176,6 +180,48 @@ async def social_callback(platform: str, code: str, state: str = None, request: 
                     user.last_login = datetime.utcnow()
                     db.commit()
             
+            # Obtener page_id e instagram_account_id para Instagram/Facebook
+            page_id = None
+            instagram_account_id = None
+            
+            print(f"🔍 Platform: {platform}, obteniendo IDs...")
+            
+            if platform == 'instagram' or platform == 'facebook':
+                # Obtener páginas de Facebook del usuario
+                import requests
+                print(f"📡 Consultando páginas de Facebook...")
+                pages_url = f"https://graph.facebook.com/v18.0/me/accounts?access_token={token_data['access_token']}"
+                pages_response = requests.get(pages_url)
+                print(f"📊 Response status: {pages_response.status_code}")
+                
+                if pages_response.status_code == 200:
+                    pages_data = pages_response.json()
+                    print(f"📋 Pages data: {pages_data}")
+                    
+                    # Si no hay páginas (permisos no aprobados), usar fallback del .env
+                    if not pages_data.get('data') or len(pages_data['data']) == 0:
+                        print("⚠️  No se encontraron páginas. Usando IDs del .env como fallback...")
+                        page_id = os.getenv('FACEBOOK_PAGE_ID')
+                        instagram_account_id = os.getenv('INSTAGRAM_BUSINESS_ACCOUNT_ID')
+                        if page_id:
+                            print(f"✅ Usando FACEBOOK_PAGE_ID del .env: {page_id}")
+                        if instagram_account_id:
+                            print(f"✅ Usando INSTAGRAM_BUSINESS_ACCOUNT_ID del .env: {instagram_account_id}")
+                    elif pages_data.get('data') and len(pages_data['data']) > 0:
+                        # Tomar la primera página
+                        page_id = pages_data['data'][0]['id']
+                        
+                        # Obtener Instagram Business Account ID de la página
+                        ig_url = f"https://graph.facebook.com/v18.0/{page_id}?fields=instagram_business_account&access_token={token_data['access_token']}"
+                        ig_response = requests.get(ig_url)
+                        
+                        if ig_response.status_code == 200:
+                            ig_data = ig_response.json()
+                            instagram_account_id = ig_data.get('instagram_business_account', {}).get('id')
+                            print(f"✅ Instagram Business Account ID: {instagram_account_id}")
+                        
+                        print(f"✅ Facebook Page ID: {page_id}")
+            
             # Guardar/actualizar token
             token = db.query(SocialToken).filter(
                 SocialToken.user_id == user.id,
@@ -187,6 +233,8 @@ async def social_callback(platform: str, code: str, state: str = None, request: 
                 token.refresh_token = token_data.get('refresh_token')
                 token.expires_at = token_data.get('expires_at')
                 token.username = user_info.get('username') or user_info.get('name')
+                token.page_id = page_id
+                token.instagram_account_id = instagram_account_id
                 token.last_used = datetime.utcnow()
             else:
                 token = SocialToken(
@@ -195,7 +243,9 @@ async def social_callback(platform: str, code: str, state: str = None, request: 
                     access_token=token_data['access_token'],
                     refresh_token=token_data.get('refresh_token'),
                     expires_at=token_data.get('expires_at'),
-                    username=user_info.get('username') or user_info.get('name')
+                    username=user_info.get('username') or user_info.get('name'),
+                    page_id=page_id,
+                    instagram_account_id=instagram_account_id
                 )
                 db.add(token)
             
@@ -278,6 +328,117 @@ async def disconnect_social_platform(platform: str):
         raise
     except Exception as e:
         print(f"❌ Error desconectando: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@router.post("/publish")
+async def publish_to_social_networks(request: Request):
+    """
+    Publica un post en múltiples redes sociales
+    
+    Body esperado:
+    {
+        "codigo": "20251113-1",
+        "networks": ["instagram", "linkedin", "facebook"]
+    }
+    
+    Usado por: Panel web (publish.html)
+    """
+    try:
+        data = await request.json()
+        codigo = data.get('codigo')
+        networks = data.get('networks', [])
+        
+        if not codigo:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Código de post requerido"
+            )
+        
+        if not networks:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Debes seleccionar al menos una red social"
+            )
+        
+        print(f"📤 Publicando post {codigo} en: {', '.join(networks)}")
+        
+        # Publicar en cada red
+        results = {}
+        published_count = 0
+        
+        for network in networks:
+            try:
+                # Llamar al método específico de cada red
+                if network == 'instagram':
+                    result = publish_service.publish_to_instagram(codigo)
+                elif network == 'linkedin':
+                    result = publish_service.publish_to_linkedin(codigo)
+                elif network == 'twitter':
+                    result = publish_service.publish_to_twitter(codigo)
+                elif network == 'facebook':
+                    result = publish_service.publish_to_facebook(codigo)
+                elif network == 'tiktok':
+                    result = publish_service.publish_to_tiktok(codigo)
+                else:
+                    result = {'success': False, 'error': f'Red social no soportada: {network}'}
+                
+                results[network] = result
+                
+                if result.get('success'):
+                    published_count += 1
+                    print(f"✅ {network}: Publicado correctamente")
+                else:
+                    print(f"❌ {network}: {result.get('error', 'Error desconocido')}")
+                    
+            except Exception as e:
+                print(f"❌ Error publicando en {network}: {e}")
+                import traceback
+                traceback.print_exc()
+                results[network] = {'success': False, 'error': str(e)}
+        
+        # Respuesta - Permitir respuesta parcial si al menos una red tuvo éxito
+        # O si todas fallaron por falta de configuración (no es un error crítico)
+        all_config_errors = all(
+            'no está conectado' in results[net].get('error', '').lower() or
+            'no configurado' in results[net].get('error', '').lower() or
+            'no disponible' in results[net].get('error', '').lower()
+            for net in results
+        )
+        
+        if published_count == 0 and not all_config_errors:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="No se pudo publicar en ninguna red social"
+            )
+        
+        # Si todas fallaron por configuración, devolver info útil
+        if published_count == 0 and all_config_errors:
+            return {
+                'success': False,
+                'published_count': 0,
+                'total': len(networks),
+                'results': results,
+                'message': 'No se pudo publicar. Configura las credenciales de las redes sociales.',
+                'config_needed': True
+            }
+        
+        return {
+            'success': True,
+            'published_count': published_count,
+            'total': len(networks),
+            'results': results,
+            'message': f'Publicado en {published_count}/{len(networks)} redes'
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error en publicación: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)

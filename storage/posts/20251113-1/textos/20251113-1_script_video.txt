@@ -1,0 +1,13 @@
+**SCRIPT: TU PRIMER TRIATLÓN OLÍMPICO**
+
+**Escena 1 (0-4s):** 
+Atleta nadando en aguas abiertas. Texto en pantalla: "1.5km natación". Voz: "¿Listo para tu primer olímpico? Necesitas 6 meses de preparación consistente."
+
+**Escena 2 (4-8s):**
+Ciclista en ruta a alta velocidad. Texto: "40km ciclismo". Voz: "Plan de 16 semanas: construye resistencia, aumenta intensidad, perfecciona detalles."
+
+**Escena 3 (8-12s):**
+Corredor en carrera final. Texto: "10km carrera". Voz: "Practica nutrición, transiciones y estrategia. Comienza conservador, acelera progresivamente."
+
+**Escena 4 (12-15s):**
+Atleta cruzando la meta levantando los brazos. Texto: "¡Conquista tus límites!" Voz: "La consistencia es clave. ¡Nos vemos en la meta!"

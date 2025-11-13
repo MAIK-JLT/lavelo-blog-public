@@ -6,6 +6,11 @@ import os
 import sys
 import requests
 from typing import Dict, Optional
+from dotenv import load_dotenv
+
+# Cargar variables de entorno
+env_path = os.path.join(os.path.dirname(__file__), '..', '..', '.env')
+load_dotenv(dotenv_path=env_path)
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 import db_service
@@ -45,10 +50,10 @@ class PublishService:
             
             token_data = tokens['instagram']
             access_token = token_data['access_token']
-            user_id = token_data.get('user_id')
+            instagram_account_id = token_data.get('instagram_account_id')
             
-            if not user_id:
-                return {'success': False, 'error': 'user_id no disponible'}
+            if not instagram_account_id:
+                return {'success': False, 'error': 'Instagram Business Account ID no disponible. Reconecta Instagram.'}
             
             # Obtener caption si no se proporciona
             if not caption:
@@ -65,7 +70,7 @@ class PublishService:
             image_url = f"https://blog.lavelo.es/storage/posts/{codigo}/imagenes/{codigo}_instagram_1x1.png"
             
             # Paso 1: Crear media container
-            create_url = f'https://graph.instagram.com/v18.0/{user_id}/media'
+            create_url = f'https://graph.instagram.com/v18.0/{instagram_account_id}/media'
             create_data = {
                 'image_url': image_url,
                 'caption': caption,
@@ -81,7 +86,7 @@ class PublishService:
             container_id = response.json()['id']
             
             # Paso 2: Publicar
-            publish_url = f'https://graph.instagram.com/v18.0/{user_id}/media_publish'
+            publish_url = f'https://graph.instagram.com/v18.0/{instagram_account_id}/media_publish'
             publish_data = {
                 'creation_id': container_id,
                 'access_token': access_token
@@ -129,11 +134,10 @@ class PublishService:
             
             token_data = tokens['instagram']
             access_token = token_data['access_token']
+            page_id = token_data.get('page_id')
             
-            # TODO: Obtener page_id de Facebook
-            page_id = os.getenv('FACEBOOK_PAGE_ID')
             if not page_id:
-                return {'success': False, 'error': 'FACEBOOK_PAGE_ID no configurado en .env'}
+                return {'success': False, 'error': 'Facebook Page ID no disponible. Reconecta Facebook/Instagram.'}
             
             # Obtener mensaje si no se proporciona
             if not message:

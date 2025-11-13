@@ -21,9 +21,14 @@
         <div class="post-info" id="post-info">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <h2 style="margin: 0;">Cargando información del post...</h2>
-                <button class="delete-post-btn" onclick="deletePost()" title="Eliminar este post">
-                    🗑️ Eliminar Post
-                </button>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-primary" onclick="goToPublish()" title="Publicar en redes sociales">
+                        📤 Publicar Post
+                    </button>
+                    <button class="delete-post-btn" onclick="deletePost()" title="Eliminar este post">
+                        🗑️ Eliminar Post
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -103,7 +108,6 @@
 
         <footer>
             <p>Sistema de automatización Lavelo Blog</p>
-            <a href="https://docs.google.com/spreadsheets/d/1f88LjU0gcBaYm_pqC9c5R29slGLHO6YASesZ8trouug/edit" target="_blank">📊 Ver Google Sheet</a>
         </footer>
     </div>
 
