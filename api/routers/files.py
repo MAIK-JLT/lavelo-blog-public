@@ -11,6 +11,7 @@ import os
 # Agregar path para importar servicios
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from services.file_service import file_service
+import db_service
 
 router = APIRouter(
     prefix="/api/files",
