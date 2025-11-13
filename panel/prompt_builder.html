@@ -162,6 +162,11 @@
   </div>
 </div>
 <script>
+// API Base URL
+const API_BASE = window.location.hostname === 'localhost' 
+  ? 'http://localhost:5001/api' 
+  : `${window.location.protocol}//${window.location.host}/api`;
+
 const config={
   perspective:["Primer plano","Retrato","Plano medio","Cuerpo entero","Vista aérea","Plano general","Vista cenital","Macro","Ángulo bajo","Vista superior"],
   lighting:["Amanecer","Hora dorada","Atardecer","Noche","Neón","Nublado","Luz de estudio","Luz suave","Luz dramática","Contraluz"],
@@ -392,8 +397,9 @@ async function aplicarMejoras() {
       formData.append('ref2_influence', referenceImages.ref2.influence);
     }
     
-    const response = await fetch('http://localhost:5001/api/improve-prompt-visual', {
+    const response = await fetch(`${API_BASE}/improve-prompt-visual`, {
       method: 'POST',
+      credentials: 'include',
       body: formData  // No enviar Content-Type, FormData lo maneja automáticamente
     });
     

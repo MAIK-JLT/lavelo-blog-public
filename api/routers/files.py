@@ -84,6 +84,24 @@ async def save_file(codigo: str, folder: str, filename: str, content: dict):
                 detail="Error guardando archivo"
             )
         
+        # Si es prompt de imagen, resetear fases dependientes
+        if 'prompt_imagen' in filename:
+            print(f"🔄 Prompt de imagen modificado, reseteando fases dependientes...")
+            post = db_service.get_post_by_codigo(codigo)
+            
+            if post and post.get('estado') not in ['DRAFT', 'BASE_TEXT_AWAITING', 'ADAPTED_TEXTS_AWAITING', 'IMAGE_PROMPT_AWAITING']:
+                # Resetear checkboxes de imagen
+                db_service.update_post(codigo, {
+                    'imagen_base_png': False,
+                    'instagram_1x1_png': False,
+                    'instagram_stories_9x16_png': False,
+                    'linkedin_16x9_png': False,
+                    'twitter_16x9_png': False,
+                    'facebook_16x9_png': False,
+                    'estado': 'IMAGE_PROMPT_AWAITING'
+                })
+                print(f"✅ Fases de imagen reseteadas, estado → IMAGE_PROMPT_AWAITING")
+        
         return {
             'success': True,
             'message': f"✅ Archivo {filename} guardado"

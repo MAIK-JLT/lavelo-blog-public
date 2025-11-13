@@ -153,6 +153,22 @@ async def improve_prompt_visual(
             file_service.save_file(codigo, 'textos', metadata_filename, json.dumps(metadata, indent=2))
             print(f"💾 Metadata guardada: {metadata_filename}")
         
+        # Resetear fases de imagen para regenerar con nuevo prompt
+        print(f"🔄 Reseteando fases de imagen para regenerar...")
+        post = db_service.get_post_by_codigo(codigo)
+        
+        if post and post.get('estado') not in ['DRAFT', 'BASE_TEXT_AWAITING', 'ADAPTED_TEXTS_AWAITING', 'IMAGE_PROMPT_AWAITING']:
+            db_service.update_post(codigo, {
+                'imagen_base_png': False,
+                'instagram_1x1_png': False,
+                'instagram_stories_9x16_png': False,
+                'linkedin_16x9_png': False,
+                'twitter_16x9_png': False,
+                'facebook_16x9_png': False,
+                'estado': 'IMAGE_PROMPT_AWAITING'
+            })
+            print(f"✅ Fases de imagen reseteadas, estado → IMAGE_PROMPT_AWAITING")
+        
         return {
             'success': True,
             'improved_prompt': improved_prompt,
