@@ -34,7 +34,8 @@ app = FastAPI(
     description="API para gestión automatizada de contenido de triatlón",
     version="2.0.0",
     docs_url="/api/docs",
-    redoc_url="/api/redoc"
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json"
 )
 
 # Session Middleware (debe ir ANTES de CORS)

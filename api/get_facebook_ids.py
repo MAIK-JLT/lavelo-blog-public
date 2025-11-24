@@ -8,9 +8,13 @@ import sys
 import requests
 from dotenv import load_dotenv
 
-# Cargar .env
-env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
-load_dotenv(dotenv_path=env_path)
+# Cargar .env (producción primero, luego fallback local)
+default_env = os.path.join(os.path.dirname(__file__), '..', '.env')
+env_file = os.getenv('ENV_FILE', os.getenv('LAVELO_ENV_FILE', '/var/www/vhosts/blog.lavelo.es/private/.env'))
+if os.path.exists(env_file):
+    load_dotenv(dotenv_path=env_file)
+else:
+    load_dotenv(dotenv_path=default_env)
 
 # Importar database
 from database import SessionLocal

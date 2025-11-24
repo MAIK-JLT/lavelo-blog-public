@@ -77,7 +77,7 @@ swagger_config = {
     "specs": [
         {
             "endpoint": 'apispec',
-            "route": '/apispec.json',
+            "route": '/api/apispec.json',
             "rule_filter": lambda rule: True,
             "model_filter": lambda tag: True,
         }

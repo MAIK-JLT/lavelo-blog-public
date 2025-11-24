@@ -15,7 +15,7 @@ Sistema automatizado end-to-end para crear y publicar contenido semanal de triat
 - **Repo GitHub:** https://github.com/MAIK-JLT/lavelo-blog-public
 - **Producción blog:** https://blog.lavelo.es
 - **Panel de control:** https://blog.lavelo.es/panel/
-- **API Docs (Swagger):** http://localhost:5001/docs
+- **API Docs (Swagger):** http://localhost:5001/api/docs
 - **Services Docs (pdoc):** http://localhost:8080
 
 ### 2. ARQUITECTURA DE SERVICIOS
@@ -584,7 +584,7 @@ Claude: [Usa tool create_post]
 ## 📚 DOCUMENTACIÓN
 
 ### 1. API Endpoints (Swagger - FastAPI)
-**Acceso:** http://localhost:5001/docs
+**Acceso:** http://localhost:5001/api/docs
 
 **Documenta:** Endpoints HTTP para el panel web
 
