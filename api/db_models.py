@@ -123,6 +123,32 @@ class Post(Base):
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
 
+class SocialPage(Base):
+    """Modelo para páginas autorizadas (Facebook/Instagram)"""
+    __tablename__ = 'social_pages'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, nullable=True)
+    platform = Column(String(50), nullable=False)  # 'facebook' o 'instagram'
+    page_id = Column(String(100), nullable=False)
+    page_name = Column(String(255))
+    instagram_account_id = Column(String(100))  # Si la página tiene IG vinculado
+    page_access_token = Column(Text)  # Page Access Token específico de esa página
+    expires_at = Column(DateTime, nullable=True)
+    connected_at = Column(DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'platform': self.platform,
+            'page_id': self.page_id,
+            'page_name': self.page_name,
+            'instagram_account_id': self.instagram_account_id,
+            'connected_at': self.connected_at.isoformat() if self.connected_at else None,
+            'expires_at': self.expires_at.isoformat() if self.expires_at else None
+        }
+
 class User(Base):
     """Modelo de Usuario (autenticación con Instagram/Facebook)"""
     __tablename__ = 'users'

@@ -4,8 +4,8 @@ Servicio de base de datos MySQL para reemplazar sheets_service.py
 Proporciona las mismas funciones pero usando MySQL en lugar de Google Sheets
 """
 from database import SessionLocal
-from db_models import Post, SocialToken
-from datetime import datetime
+from db_models import Post, SocialToken, SocialPage
+from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 
 def get_all_posts() -> List[Dict]:
@@ -227,77 +227,87 @@ def get_all_social_tokens() -> List[Dict]:
             'access_token': token.access_token,
             'refresh_token': token.refresh_token,
             'expires_at': token.expires_at.isoformat() if token.expires_at else None,
-            'username': token.username
+            'username': token.username,
+            'page_id': token.page_id,
+            'instagram_account_id': token.instagram_account_id
         } for token in tokens]
     finally:
         db.close()
 
-def save_social_token(platform: str, token_data: Dict = None, access_token: str = None, 
-                     refresh_token: str = None, expires_at: datetime = None, username: str = None) -> Dict:
+def save_social_token(platform: str, token_data: Dict = None,
+                       access_token: str = None,
+                       refresh_token: str = None,
+                       expires_at: datetime = None,
+                       username: str = None,
+                       page_id: str = None,
+                       instagram_account_id: str = None) -> Dict:
     """
-    Guarda o actualiza un token de red social
-    
-    Args:
-        platform: Plataforma (instagram, linkedin, etc.)
-        token_data: Dict completo con todos los datos (nuevo formato)
-        access_token: Token de acceso (formato legacy)
-        refresh_token: Token de refresco (formato legacy)
-        expires_at: Fecha de expiración (formato legacy)
-        username: Nombre de usuario (formato legacy)
+    Guarda o actualiza un token de red social.
     """
     db = SessionLocal()
     try:
-        # Si se pasa token_data (nuevo formato), usarlo
+        # NORMALIZAR token_data
         if token_data:
             access_token = token_data.get('access_token')
             refresh_token = token_data.get('refresh_token')
-            expires_at_str = token_data.get('expires_at')
             username = token_data.get('username')
-            
-            # Convertir string ISO a datetime si es necesario
-            if expires_at_str and isinstance(expires_at_str, str):
-                from datetime import datetime
-                expires_at = datetime.fromisoformat(expires_at_str)
-            else:
-                expires_at = expires_at_str
-        
-        token = db.query(SocialToken).filter(SocialToken.platform == platform).first()
-        
-        if token:
-            # Actualizar existente
-            token.access_token = access_token
-            if refresh_token is not None:
-                token.refresh_token = refresh_token
-            if expires_at is not None:
-                token.expires_at = expires_at
-            if username is not None:
-                token.username = username
+            page_id = token_data.get('page_id')
+            instagram_account_id = token_data.get('instagram_account_id')
+            user_id = token_data.get('user_id')
+
+            # Calcular expires_at
+            expires_in = token_data.get('expires_in')
+            if expires_in:
+                expires_at = datetime.now() + timedelta(seconds=int(expires_in))
+            elif isinstance(token_data.get('expires_at'), str):
+                expires_at = datetime.fromisoformat(token_data.get('expires_at'))
+
+        # --- GUARDAR (por plataforma y usuario) ---
+        # Nota: SocialToken.user_id es NOT NULL, por lo que debemos persistirlo siempre
+        rec = None
+        if token_data and user_id is not None:
+            rec = db.query(SocialToken).filter(
+                SocialToken.platform == platform,
+                SocialToken.user_id == user_id
+            ).first()
         else:
-            # Crear nuevo
-            token = SocialToken(
+            # Compatibilidad legacy (sin user_id)
+            rec = db.query(SocialToken).filter(SocialToken.platform == platform).first()
+
+        if rec:
+            rec.access_token = access_token or rec.access_token
+            rec.refresh_token = refresh_token or rec.refresh_token
+            rec.expires_at = expires_at or rec.expires_at
+            rec.username = username or rec.username
+            rec.page_id = page_id or rec.page_id
+            rec.instagram_account_id = instagram_account_id or rec.instagram_account_id
+            if token_data and user_id is not None:
+                rec.user_id = rec.user_id or user_id
+        else:
+            rec = SocialToken(
                 platform=platform,
                 access_token=access_token,
                 refresh_token=refresh_token,
+                username=username,
                 expires_at=expires_at,
-                username=username
+                page_id=page_id,
+                instagram_account_id=instagram_account_id,
+                user_id=user_id if token_data else None
             )
-            db.add(token)
-        
+            db.add(rec)
+
         db.commit()
-        db.refresh(token)
-        
-        return {
-            'platform': token.platform,
-            'access_token': token.access_token,
-            'refresh_token': token.refresh_token,
-            'expires_at': token.expires_at.isoformat() if token.expires_at else None,
-            'username': token.username
-        }
+        db.refresh(rec)
+
+        return rec.to_dict()
+
     except Exception as e:
         db.rollback()
-        raise e
+        print(f"❌ Error guardando token: {e}")
+        raise
     finally:
         db.close()
+
 
 def delete_social_token(platform: str) -> bool:
     """Elimina un token de red social"""
@@ -331,7 +341,87 @@ def get_social_tokens() -> Dict:
             'expires_at': token['expires_at'],
             'username': token['username'],
             'connected_at': token.get('connected_at'),
-            'last_used': token.get('last_used')
+            'last_used': token.get('last_used'),
+            'page_id': token.get('page_id'),
+            'instagram_account_id': token.get('instagram_account_id')
         }
     
     return tokens_dict
+
+# ==============================
+# Social Pages (Facebook/IG)
+# ==============================
+def upsert_social_page(page: Dict) -> Dict:
+    """
+    Crea o actualiza una página social (por page_id).
+    page = {
+        'platform': 'facebook',
+        'page_id': '123',
+        'page_name': 'Mi página',
+        'instagram_account_id': '1789...',
+        'page_access_token': 'EAA....',
+        'expires_at': datetime | None,
+        'user_id': int | None
+    }
+    """
+    db = SessionLocal()
+    try:
+        rec = db.query(SocialPage).filter(SocialPage.page_id == page['page_id']).first()
+
+        if rec:
+            rec.platform = page.get('platform', rec.platform)
+            rec.page_name = page.get('page_name', rec.page_name)
+            rec.instagram_account_id = page.get('instagram_account_id', rec.instagram_account_id)
+            rec.page_access_token = page.get('page_access_token', rec.page_access_token)
+            rec.expires_at = page.get('expires_at', rec.expires_at)
+            rec.user_id = page.get('user_id', rec.user_id)
+        else:
+            rec = SocialPage(
+                platform=page.get('platform', 'facebook'),
+                page_id=page['page_id'],
+                page_name=page.get('page_name'),
+                instagram_account_id=page.get('instagram_account_id'),
+                page_access_token=page.get('page_access_token'),
+                expires_at=page.get('expires_at'),
+                user_id=page.get('user_id')
+            )
+            db.add(rec)
+
+        db.commit()
+        db.refresh(rec)
+        return rec.to_dict()
+
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Error guardando página: {e}")
+        raise
+    finally:
+        db.close()
+
+
+def list_social_pages(platform: str = None) -> List[Dict]:
+    """Lista páginas guardadas (opcionalmente filtradas por plataforma)."""
+    db = SessionLocal()
+    try:
+        q = db.query(SocialPage)
+        if platform:
+            q = q.filter(SocialPage.platform == platform)
+        return [p.to_dict() for p in q.all()]
+    finally:
+        db.close()
+
+def get_social_page_by_page_id(page_id: str) -> Optional[Dict]:
+    db = SessionLocal()
+    try:
+        p = db.query(SocialPage).filter(SocialPage.page_id == page_id).first()
+        return p.to_dict() if p else None
+    finally:
+        db.close()
+
+def get_social_page_by_instagram_id(instagram_account_id: str) -> Optional[Dict]:
+    db = SessionLocal()
+    try:
+        p = db.query(SocialPage).filter(SocialPage.instagram_account_id == instagram_account_id).first()
+        return p.to_dict() if p else None
+    finally:
+        db.close()

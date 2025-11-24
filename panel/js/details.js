@@ -1,5 +1,6 @@
 // Configuración
-const API_BASE = '/api';
+const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+const API_BASE = isProduction ? '/api' : 'http://localhost:5001/api';
 
 // Estado global
 let currentPost = null;
@@ -23,7 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // Cargar datos del post
 async function cargarPost() {
     try {
-        const response = await fetch('/api/posts');
+        const response = await fetch(`${API_BASE}/posts`);
         const data = await response.json();
         
         if (!data.success) {
@@ -281,7 +282,7 @@ async function renderImageBasePhase() {
         `;
     } else {
         // Imagen ya existe, mostrar preview
-        const imageUrl = `/api/files/${codigo}/imagenes/${codigo}_imagen_base.png`;
+        const imageUrl = `${API_BASE}/files/${codigo}/imagenes/${codigo}_imagen_base.png`;
         
         phaseContent.innerHTML = `
             <div class="phase-section">
@@ -449,7 +450,7 @@ async function loadImageWithRetry(filename, containerId, altText, maxRetries = 3
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-            const url = `/api/files/${codigo}/imagenes/${filename}?t=${Date.now()}`;
+            const url = `${API_BASE}/files/${codigo}/imagenes/${filename}?t=${Date.now()}`;
             
             // Verificar que la imagen existe antes de mostrarla
             const response = await fetch(url);
@@ -517,11 +518,11 @@ async function renderVideoBasePhase() {
                 <h3>🎬 Video Base</h3>
                 <div style="text-align: center; padding: 20px;">
                     <video controls style="max-width: 100%; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
-                        <source src="/api/files/${codigo}/videos/${codigo}_video_base.mp4" type="video/mp4">
+                        <source src="${API_BASE}/files/${codigo}/videos/${codigo}_video_base.mp4" type="video/mp4">
                         Tu navegador no soporta video.
                     </video>
                     <div style="margin-top: 15px;">
-                        <a href="/api/files/${codigo}/videos/${codigo}_video_base.mp4" download="${codigo}_video_base.mp4" class="ai-btn" style="display: inline-block; text-decoration: none;">⬇️ Descargar Video</a>
+                        <a href="${API_BASE}/files/${codigo}/videos/${codigo}_video_base.mp4" download="${codigo}_video_base.mp4" class="ai-btn" style="display: inline-block; text-decoration: none;">⬇️ Descargar Video</a>
                     </div>
                 </div>
                 <p style="color: #666; font-size: 0.9em; text-align: center; margin-top: 10px;">Si el video es correcto, vuelve al panel y haz clic en VALIDATE para generar los formatos.</p>
@@ -571,7 +572,7 @@ async function loadVideoWithRetry(filename, containerId, altText, maxRetries = 3
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-            const url = `/api/files/${codigo}/videos/${filename}?t=${Date.now()}`;
+            const url = `${API_BASE}/files/${codigo}/videos/${filename}?t=${Date.now()}`;
             
             // Verificar que el video existe antes de mostrarlo
             const response = await fetch(url);
@@ -620,7 +621,7 @@ async function renderReadyToPublishPhase() {
 // Obtener archivo del storage local
 async function fetchFileFromDrive(folder, filename) {
     try {
-        const response = await fetch(`/api/files/${codigo}/${folder}/${filename}`);
+        const response = await fetch(`${API_BASE}/files/${codigo}/${folder}/${filename}`);
         if (!response.ok) return null;
         const data = await response.json();
         return data.content;

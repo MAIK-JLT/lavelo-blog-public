@@ -8,6 +8,7 @@ import os
 import requests
 import fal_client
 from datetime import datetime
+import asyncio
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 import db_service
@@ -42,7 +43,8 @@ class VideoService:
             width, height = 1280, 720
         
         # Llamar a Fal.ai
-        result = fal_client.subscribe(
+        result = await asyncio.to_thread(
+            fal_client.subscribe,
             "fal-ai/bytedance/seedance/v1/pro/text-to-video",
             arguments={
                 "prompt": prompt,
@@ -59,7 +61,7 @@ class VideoService:
         video_url = result['video']['url']
         
         # Descargar video
-        response = requests.get(video_url)
+        response = await asyncio.to_thread(requests.get, video_url)
         video_bytes = response.content
         
         return {
@@ -91,7 +93,8 @@ class VideoService:
             width, height = 1280, 720
         
         # Llamar a Fal.ai
-        result = fal_client.subscribe(
+        result = await asyncio.to_thread(
+            fal_client.subscribe,
             "fal-ai/bytedance/seedance/v1/pro/image-to-video",
             arguments={
                 "prompt": prompt,
@@ -109,7 +112,7 @@ class VideoService:
         video_url = result['video']['url']
         
         # Descargar video
-        response = requests.get(video_url)
+        response = await asyncio.to_thread(requests.get, video_url)
         video_bytes = response.content
         
         return {
@@ -205,7 +208,7 @@ class VideoService:
             ]
             
             try:
-                subprocess.run(cmd, check=True, capture_output=True)
+                await asyncio.to_thread(subprocess.run, cmd, check=True, capture_output=True)
                 
                 # Actualizar checkbox en BD
                 checkbox_field = f'{name}_mp4'

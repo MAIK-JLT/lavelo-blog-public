@@ -297,6 +297,17 @@
         </div>
 
         <div id="content" style="display: none;">
+            <!-- Selección de Página / IG -->
+            <div class="content-section">
+                <h2 class="section-title">🏷️ Seleccionar Página / IG</h2>
+                <p style="color:#666; margin-bottom:10px;">Elige la página donde publicar. Si seleccionas Instagram en redes, la página debe tener IG vinculado.</p>
+                <div style="display:flex; gap:12px; align-items:center;">
+                    <select id="page-select" class="btn" style="min-width:320px; background:#f8f9fa; color:#333;">
+                        <option value="">Cargando páginas...</option>
+                    </select>
+                    <span id="page-info" style="color:#666; font-size:0.9em;"></span>
+                </div>
+            </div>
             <!-- Sección de Redes Sociales -->
             <div class="content-section">
                 <h2 class="section-title">🔗 Redes Sociales</h2>
@@ -337,6 +348,9 @@
         let postData = null;
         let connectionsStatus = {};
         let selectedNetworks = [];
+        let socialPages = [];
+        let selectedPageId = null;
+        let selectedIgId = null;
 
         // Obtener código del post de la URL
         const urlParams = new URLSearchParams(window.location.search);
@@ -351,9 +365,11 @@
         document.addEventListener('DOMContentLoaded', async () => {
             await loadPostData();
             await loadConnectionsStatus();
+            await loadSocialPages();
             
             console.log('📊 Post Data:', postData);
             console.log('🔗 Connections Status:', connectionsStatus);
+            console.log('📄 Pages:', socialPages);
             
             renderNetworks();
             loadPreview();
@@ -416,6 +432,58 @@
                     tiktok: { connected: false }
                 };
             }
+        }
+
+        // Cargar páginas conectadas
+        async function loadSocialPages() {
+            try {
+                const res = await fetch(`${API_BASE}/api/social/pages`);
+                const json = await res.json();
+                if (!json.success) throw new Error(json.error || 'No se pudieron cargar páginas');
+                socialPages = json.pages || [];
+
+                const select = document.getElementById('page-select');
+                if (!socialPages.length) {
+                    select.innerHTML = '<option value="">No hay páginas conectadas</option>';
+                    return;
+                }
+                // Preferir primera con IG si existe
+                const firstWithIg = socialPages.find(p => p.instagram_account_id);
+                const defaultPage = firstWithIg || socialPages[0];
+
+                select.innerHTML = socialPages.map(p => `
+                    <option value="${p.page_id}" data-igid="${p.instagram_account_id || ''}">
+                        ${p.page_name || p.page_id} ${p.instagram_account_id ? '(IG)' : ''}
+                    </option>
+                `).join('');
+
+                select.value = defaultPage.page_id;
+                selectedPageId = defaultPage.page_id;
+                selectedIgId = defaultPage.instagram_account_id || null;
+                updatePageInfo();
+
+                select.addEventListener('change', () => {
+                    selectedPageId = select.value || null;
+                    selectedIgId = select.options[select.selectedIndex].dataset.igid || null;
+                    updatePageInfo();
+                    updateSelection();
+                });
+            } catch (e) {
+                console.error('❌ Error cargando páginas:', e);
+                document.getElementById('page-select').innerHTML = '<option value="">Error cargando páginas</option>';
+            }
+        }
+
+        function updatePageInfo() {
+            const info = document.getElementById('page-info');
+            if (!selectedPageId) {
+                info.textContent = 'Selecciona una página';
+                return;
+            }
+            const p = socialPages.find(x => x.page_id === selectedPageId);
+            const name = p?.page_name || selectedPageId;
+            const ig = p?.instagram_account_id ? `IG: ${p.instagram_account_id}` : 'Sin IG';
+            info.textContent = `${name} • ${ig}`;
         }
 
         // Renderizar lista de redes
@@ -501,7 +569,14 @@
                 .map(cb => cb.value);
             
             document.getElementById('selected-count').textContent = selectedNetworks.length;
-            document.getElementById('publish-btn').disabled = selectedNetworks.length === 0;
+            const needsIg = selectedNetworks.includes('instagram');
+            const igOk = !needsIg || !!selectedIgId;
+            const hasPage = !!selectedPageId;
+            const canPublish = selectedNetworks.length > 0 && igOk && hasPage;
+            document.getElementById('publish-btn').disabled = !canPublish;
+            if (needsIg && !selectedIgId) {
+                showMessage('error', 'La página seleccionada no tiene Instagram vinculado. Elige otra o desmarca Instagram.');
+            }
         }
 
         // Cargar preview
@@ -549,7 +624,9 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         codigo: codigo,
-                        networks: selectedNetworks
+                        networks: selectedNetworks,
+                        page_id: selectedPageId,
+                        instagram_account_id: selectedIgId || undefined
                     })
                 });
 

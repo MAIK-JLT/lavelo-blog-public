@@ -503,28 +503,39 @@ Estado "ERROR" → 🔴 Rojo (revisar)
 ### ¿Qué es el MCP Server?
 Servidor que expone herramientas a IAs externas (Claude Desktop, Cursor, etc.) usando el protocolo MCP (Model Context Protocol).
 
-### Características:
+### Características (optimizado por velocidad):
 - **Protocolo JSON-RPC sobre stdio** (no HTTP)
 - **Llama directamente a servicios** (no pasa por FastAPI)
 - **Comparte lógica con FastAPI** (mismos servicios)
-- **9 herramientas disponibles** para IAs
+- **Ejecución asíncrona tipo start/poll** para tareas pesadas
+  - Tools `start_*` devuelven `job_id` inmediato
+  - Tool `get_job_status` para consultar progreso/resultado
+- **IO bloqueante offloaded** a hilos (Anthropic, Fal.ai, requests, ffmpeg) para no bloquear el event loop
+- **Prewarm** de clientes (Anthropic/DB) al iniciar el MCP para evitar cold start
+- **Sin caché de datos por ahora**, para observar respuestas reales del LLM y su UX
 - **Configuración simple** en Claude Desktop
 
 ### Herramientas MCP Disponibles:
 
 **Posts:**
-- `list_posts` - Lista todos los posts
+- `list_posts(limit?, compact?)` - Lista posts; `compact` (default) devuelve líneas cortas; `limit` limita el número.
 - `create_post` - Crea nuevo post
-- `get_post` - Obtiene detalles de un post
-- `init_post_folders` - Inicializa carpetas en Drive
+- `get_post(codigo, include_files?)` - `include_files=false` por defecto para ser rápido
+- `init_post_folders` - Inicializa carpetas en storage local
 
 **Imágenes:**
 - `generate_image` - Genera imagen (✅ soporta referencias)
-- `generate_instructions_from_post` - Genera instrucciones
+- `generate_instructions_from_post` - Genera instrucciones de imagen
+- `start_generate_image(codigo, num_images?)` - Inicia generación async; devuelve `job_id`
 
 **Videos:**
 - `generate_video_text` - Text-to-Video (❌ no soporta referencias)
 - `generate_video_image` - Image-to-Video (❌ no soporta referencias)
+
+**Flujos completos:**
+- `start_generate_complete_post(tema?, categoria?)` - Crea post + prompt + imágenes en background; devuelve `job_id`
+- `get_job_status(job_id)` - Estado (`queued|running|succeeded|failed|canceled`), progreso y resultado
+- `cancel_job(job_id)` - Cancelación best-effort de un job
 
 **Chat:**
 - `chat` - Interactúa con Claude
@@ -549,6 +560,13 @@ pip install mcp
 ```
 
 **3. Reiniciar Claude Desktop**
+
+### Velocidad y UX del LLM
+
+- **Respuesta instantánea**: las tools `start_*` devuelven en milisegundos, el trabajo pesado corre en background.
+- **Event loop libre**: llamadas a Anthropic, Fal.ai, descargas HTTP y ffmpeg se ejecutan fuera del loop con `asyncio.to_thread`.
+- **Prewarm**: al iniciar, el MCP hace un ping ligero a Anthropic y DB para evitar latencias del primer uso.
+- **Sin caché por ahora**: medimos la experiencia real del LLM y sus expectativas antes de introducir caches (decisión consciente).
 
 ### Uso:
 ```

@@ -12,6 +12,7 @@ import fal_client
 import cloudinary
 import cloudinary.uploader
 from dotenv import load_dotenv
+import asyncio
 
 # Cargar variables de entorno
 load_dotenv()
@@ -104,7 +105,8 @@ class ImageService:
         print(f"🚀 Llamando a Fal.ai SeaDream 4.0...")
         
         # 5. Llamar a Fal.ai
-        result = fal_client.subscribe(
+        result = await asyncio.to_thread(
+            fal_client.subscribe,
             "fal-ai/bytedance/seedream/v4/text-to-image",
             arguments=arguments
         )
@@ -122,7 +124,7 @@ class ImageService:
             
             if image_url:
                 # Descargar imagen
-                response = requests.get(image_url)
+                response = await asyncio.to_thread(requests.get, image_url)
                 image_bytes = response.content
                 
                 # Guardar localmente

@@ -20,10 +20,18 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Cargar variables de entorno ANTES de importar sheets_service
-env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
-load_dotenv(dotenv_path=env_path)
+# 1) Usa ENV_FILE o LAVELO_ENV_FILE si están definidos (p. ej. /var/www/vhosts/<dominio>/private/.env)
+# 2) Si no, hace fallback al .env del repo (../.env) para desarrollo local
+default_env = os.path.join(os.path.dirname(__file__), '..', '.env')
+env_file = os.getenv('ENV_FILE', os.getenv('LAVELO_ENV_FILE', '/var/www/vhosts/blog.lavelo.es/private/.env'))
+if os.path.exists(env_file):
+    load_dotenv(dotenv_path=env_file)
+else:
+    load_dotenv(dotenv_path=default_env)
 
 from sheets_service import sheets_service
+from services.publish_service import publish_service
+from database import init_db
 import db_service
 from anthropic import Anthropic
 from openai import OpenAI
@@ -52,6 +60,16 @@ cloudinary.config(
 
 app = Flask(__name__, static_folder='../panel', static_url_path='')
 app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+ 
+# Permitir CORS y barras finales opcionales
+CORS(app)
+app.url_map.strict_slashes = False
+
+# Asegurar que las tablas existen
+try:
+    init_db()
+except Exception as _e:
+    print(f"⚠️ No se pudo inicializar DB: {_e}")
 
 # Configurar Swagger
 swagger_config = {
@@ -117,6 +135,22 @@ def serve_falai(filename):
     """Servir archivos estáticos de la carpeta falai"""
     falai_dir = os.path.join(os.path.dirname(__file__), '..', 'falai')
     return send_from_directory(falai_dir, filename)
+
+# Evitar 404 por favicon
+@app.route('/favicon.ico')
+def favicon():
+    return ('', 204)
+
+# Servir el panel web desde el mismo servidor (evita CORS)
+@app.route('/panel/')
+def serve_panel_index():
+    panel_dir = os.path.join(os.path.dirname(__file__), '..', 'panel')
+    return send_from_directory(panel_dir, 'index.html')
+
+@app.route('/panel/<path:path>')
+def serve_panel_assets(path):
+    panel_dir = os.path.join(os.path.dirname(__file__), '..', 'panel')
+    return send_from_directory(panel_dir, path)
 
 @app.route('/panel/<path:filename>')
 def serve_panel(filename):
@@ -252,6 +286,18 @@ def get_posts():
     try:
         posts = db_service.get_all_posts()
         return jsonify({'success': True, 'posts': posts})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# API: Obtener un post por código
+@app.route('/api/posts/<codigo>', methods=['GET'])
+def get_post(codigo):
+    """Obtener un post por su código desde SQLite"""
+    try:
+        post = db_service.get_post_by_codigo(codigo)
+        if not post:
+            return jsonify({'error': 'Post no encontrado'}), 404
+        return jsonify({'success': True, 'post': post})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -3888,40 +3934,37 @@ def get_social_status():
               type: object
     """
     try:
-        # Leer tokens desde Google Sheets
-        tokens = sheets_service.get_social_tokens()
-        
+        # Leer tokens desde SQLite (fuente de verdad actual)
+        tokens = db_service.get_social_tokens() or {}
+
+        # Normalizar salida esperada por el panel
         platforms = ['instagram', 'linkedin', 'twitter', 'facebook', 'tiktok']
         status = {}
-        
         for platform in platforms:
-            if platform in tokens and tokens[platform]:
-                token_data = tokens[platform]
+            t = tokens.get(platform)
+            if t:
                 status[platform] = {
                     'connected': True,
-                    'username': token_data.get('username', 'N/A'),
-                    'expires_at': token_data.get('expires_at'),
-                    'connected_at': token_data.get('connected_at'),
-                    'last_used': token_data.get('last_used')
+                    'username': t.get('username', 'N/A'),
+                    'expires_at': t.get('expires_at'),
+                    'connected_at': t.get('connected_at'),
+                    'last_used': t.get('last_used')
                 }
-            # Si Instagram está conectado, Facebook también lo está (mismo token)
-            elif platform == 'facebook' and 'instagram' in tokens and tokens['instagram']:
-                token_data = tokens['instagram']
-                status[platform] = {
-                    'connected': True,
-                    'username': token_data.get('username', 'N/A'),
-                    'expires_at': token_data.get('expires_at'),
-                    'connected_at': token_data.get('connected_at'),
-                    'last_used': token_data.get('last_used'),
-                    'shared_with_instagram': True
-                }
+                # Campos extra útiles para Instagram/Facebook
+                if platform in ['instagram', 'facebook']:
+                    status[platform]['page_id'] = t.get('page_id')
+                    status[platform]['instagram_account_id'] = t.get('instagram_account_id')
             else:
-                status[platform] = {
-                    'connected': False
-                }
-        
+                status[platform] = {'connected': False}
+
+        # Si Instagram conectado, marcar Facebook como compartido si no tiene token propio
+        if status.get('instagram', {}).get('connected') and not tokens.get('facebook'):
+            fb = dict(status.get('facebook', {}))
+            fb.update({'connected': True, 'shared_with_instagram': True})
+            status['facebook'] = fb
+
         return jsonify(status)
-        
+
     except Exception as e:
         print(f"❌ Error obteniendo estado social: {str(e)}")
         import traceback
@@ -4053,15 +4096,56 @@ def social_callback(platform):
             return jsonify({'error': 'Estado OAuth inválido'}), 400
         
         # Intercambiar code por access_token
-        token_data = exchange_code_for_token(platform, code)
-        
+        print(f"🔁 OAuth callback recibido para {platform}")
+        current_user_id = 2
+        token_data = exchange_code_for_token(platform, code, current_user_id)
+
         if not token_data:
             return redirect(f"/panel/social_connect.html?error=token_exchange_failed&platform={platform}")
         
-        # Guardar token en Google Sheets
-        sheets_service.save_social_token(platform, token_data)
+        # Guardar token en SQLite (DB) con campos extra si existen
+        # Importante: usar el user_id LOCAL (no el de Meta)
+        payload = {
+            # SIEMPRE guardar el USER LONG-LIVED TOKEN
+            'access_token': token_data.get('user_long_lived_token'),
+            'refresh_token': token_data.get('refresh_token'),
+            'expires_in': token_data.get('expires_in'),
+            'username': token_data.get('username'),
+            'user_id': current_user_id
+        }
+        # Extras específicos de Instagram/Facebook
+        if platform == 'instagram':
+            if token_data.get('page_id'):
+                payload['page_id'] = token_data.get('page_id')
+            if token_data.get('instagram_account_id'):
+                payload['instagram_account_id'] = token_data.get('instagram_account_id')
+            if token_data.get('user_long_lived_token'):
+                payload['user_long_lived_token'] = token_data.get('user_long_lived_token')
+
+        print("📝 Payload a guardar en DB (recortado):",
+              {
+                  'platform': platform,
+                  'username': payload.get('username'),
+                  'user_id': payload.get('user_id'),
+                  'page_id': payload.get('page_id'),
+                  'instagram_account_id': payload.get('instagram_account_id'),
+                  'access_token_preview': (payload.get('access_token') or '')[:15] + '...'
+              })
+        db_service.save_social_token(platform, payload)
         
-        print(f"✅ Token de {platform} guardado correctamente")
+        print(f"✅ Token de {platform} guardado correctamente en SQLite")
+        try:
+            tokens_after = db_service.get_social_tokens()
+            ig = tokens_after.get('instagram') if tokens_after else None
+            if ig:
+                print("🔎 Verificación post-guardado (instagram):",
+                      {
+                          'page_id': ig.get('page_id'),
+                          'instagram_account_id': ig.get('instagram_account_id'),
+                          'token_preview': (ig.get('access_token') or '')[:15] + '...'
+                      })
+        except Exception as ver_e:
+            print(f"⚠️ No se pudo verificar post-guardado: {ver_e}")
         
         return redirect(f"/panel/social_connect.html?success=true&platform={platform}")
         
@@ -4071,68 +4155,140 @@ def social_callback(platform):
         traceback.print_exc()
         return redirect(f"/panel/social_connect.html?error={str(e)}&platform={platform}")
 
-def exchange_code_for_token(platform, code):
-    """Intercambiar authorization code por access token"""
+def exchange_code_for_token(platform, code, current_user_id):
+    """Intercambia el code por un long-lived user token + todas las páginas"""
+
     try:
-        token_endpoints = {
-            'instagram': 'https://graph.facebook.com/v21.0/oauth/access_token',
-            'linkedin': 'https://www.linkedin.com/oauth/v2/accessToken',
-            'twitter': 'https://api.twitter.com/2/oauth2/token',
-            'facebook': 'https://graph.facebook.com/v18.0/oauth/access_token',
-            'tiktok': 'https://open-api.tiktok.com/oauth/access_token/'
-        }
-        
-        client_secrets = {
-            'instagram': os.getenv('INSTAGRAM_CLIENT_SECRET'),
-            'linkedin': os.getenv('LINKEDIN_CLIENT_SECRET'),
-            'twitter': os.getenv('TWITTER_CLIENT_SECRET'),
-            'facebook': os.getenv('FACEBOOK_CLIENT_SECRET'),
-            'tiktok': os.getenv('TIKTOK_CLIENT_SECRET')
-        }
-        
-        client_ids = {
-            'instagram': os.getenv('INSTAGRAM_CLIENT_ID'),
-            'linkedin': os.getenv('LINKEDIN_CLIENT_ID'),
-            'twitter': os.getenv('TWITTER_CLIENT_ID'),
-            'facebook': os.getenv('FACEBOOK_CLIENT_ID'),
-            'tiktok': os.getenv('TIKTOK_CLIENT_ID')
-        }
-        
-        redirect_uri = f"{request.host_url}api/social/callback/{platform}"
-        
-        # Preparar request
-        data = {
-            'client_id': client_ids[platform],
-            'client_secret': client_secrets[platform],
-            'code': code,
-            'redirect_uri': redirect_uri,
-            'grant_type': 'authorization_code'
-        }
-        
-        response = requests.post(token_endpoints[platform], data=data)
-        
-        if response.status_code != 200:
-            print(f"❌ Error intercambiando token: {response.text}")
-            return None
-        
-        token_response = response.json()
-        
-        # Obtener info del usuario
-        user_info = get_user_info(platform, token_response['access_token'])
-        
-        return {
-            'access_token': token_response['access_token'],
-            'refresh_token': token_response.get('refresh_token'),
-            'expires_in': token_response.get('expires_in', 3600),
-            'username': user_info.get('username', 'N/A'),
-            'user_id': user_info.get('id')
-        }
-        
+        if platform == 'instagram':
+            client_id = os.getenv('INSTAGRAM_CLIENT_ID')
+            client_secret = os.getenv('INSTAGRAM_CLIENT_SECRET')
+
+            redirect_uri = request.host_url.rstrip('/') + "/api/social/callback/instagram"
+
+            # === 1) CODE → SHORT TOKEN ===
+            short_resp = requests.get(
+                "https://graph.facebook.com/v21.0/oauth/access_token",
+                params={
+                    "client_id": client_id,
+                    "redirect_uri": redirect_uri,
+                    "client_secret": client_secret,
+                    "code": code
+                }
+            )
+            if short_resp.status_code != 200:
+                print("❌ Error short token:", short_resp.text)
+                return None
+
+            short_token = short_resp.json().get("access_token")
+
+            # === 2) SHORT → LONG TOKEN ===
+            long_resp = requests.get(
+                "https://graph.facebook.com/v21.0/oauth/access_token",
+                params={
+                    "grant_type": "fb_exchange_token",
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "fb_exchange_token": short_token
+                }
+            )
+
+            if long_resp.status_code != 200:
+                print("❌ Error long token:", long_resp.text)
+                return None
+
+            long_json = long_resp.json()
+            user_long_token = long_json["access_token"]
+
+            # === 3) Obtener TODAS LAS PÁGINAS con IG ===
+            pages_resp = requests.get(
+                "https://graph.facebook.com/v21.0/me/accounts",
+                params={
+                    "access_token": user_long_token,
+                    "fields": "id,name,access_token,instagram_business_account"
+                }
+            )
+            print("📄 /me/accounts =>", pages_resp.text)
+
+            if pages_resp.status_code != 200:
+                print("❌ Error /me/accounts:", pages_resp.text)
+                return None
+
+            pages_json = pages_resp.json().get("data", [])
+
+            pages_all = []
+            pages_with_ig = []
+
+            for p in pages_json:
+                pid = p.get("id")
+                pname = p.get("name")
+                page_token = p.get("access_token")  # Puede ser None
+                ig_acc = p.get("instagram_business_account", {})
+                ig_id_local = ig_acc.get("id")
+
+                # Guardar en BD
+                db_service.upsert_social_page({
+                    'user_id': current_user_id,
+                    'platform': 'facebook_page',
+                    'page_id': pid,
+                    'page_name': pname,
+                    'instagram_account_id': ig_id_local,
+                    'page_access_token': page_token,
+                    'expires_at': None
+                })
+
+                row = {
+                    'id': pid,
+                    'name': pname,
+                    'access_token': page_token,
+                    'instagram_id': ig_id_local
+                }
+
+                pages_all.append(row)
+                if ig_id_local:
+                    pages_with_ig.append(row)
+
+            if not pages_all:
+                print("⚠️ Usuario sin páginas")
+                return None
+
+            # === 4) Elegir página preferida ===
+            if pages_with_ig:
+                selected = pages_with_ig[0]   # priorizamos página con IG
+            else:
+                selected = pages_all[0]       # fallback estable
+
+            # === 5) Información del usuario ===
+            me_resp = requests.get(
+                "https://graph.facebook.com/v21.0/me",
+                params={"fields": "id,name", "access_token": user_long_token}
+            )
+            if me_resp.status_code == 200:
+                me_json = me_resp.json()
+                user_meta_id = me_json.get("id")
+                username = me_json.get("name")
+            else:
+                user_meta_id = None
+                username = "N/A"
+
+            # === 6) Devolver datos ===
+            return {
+                "access_token": user_long_token,
+                "refresh_token": None,
+                "expires_in": long_json.get("expires_in", 5184000),
+                "username": username,
+                "user_id": user_meta_id,
+                "pages": pages_all,
+                "page_id": selected["id"],
+                "instagram_account_id": selected["instagram_id"],
+                "user_long_lived_token": user_long_token
+            }
+
     except Exception as e:
-        print(f"❌ Error intercambiando token: {str(e)}")
+        print("❌ ERROR TOKEN EXCHANGE:", e)
         import traceback
         traceback.print_exc()
         return None
+
 
 def get_user_info(platform, access_token):
     """Obtener información del usuario"""
@@ -4558,6 +4714,61 @@ def publish_to_tiktok(access_token, description, video_url):
         
     except Exception as e:
         return {'success': False, 'error': str(e)}
+
+# ============================================
+# PUBLICACIÓN EN REDES (endpoint unificado)
+# ============================================
+@app.route('/api/social/publish', methods=['POST'])
+def social_publish():
+    """Publicar un post en redes seleccionadas usando tokens de SQLite"""
+    try:
+        data = request.get_json(silent=True) or {}
+        codigo = data.get('codigo')
+        networks = data.get('networks')  # lista opcional
+        page_id = data.get('page_id')
+        instagram_account_id = data.get('instagram_account_id')
+
+        if not codigo:
+            return jsonify({'success': False, 'error': 'Falta el código del post'}), 400
+
+        print(f"📤 Publicando post {codigo} en: {', '.join(networks) if networks else 'todas las conectadas'} | page_id={page_id} ig_id={instagram_account_id}")
+
+        result = publish_service.publish_to_all(codigo,
+                                               platforms=networks,
+                                               page_id=page_id,
+                                               instagram_account_id=instagram_account_id)
+
+        response = {
+            'success': result.get('success', False),
+            'published_count': result.get('published', 0),
+            'total': result.get('total', 0),
+            'results': result.get('results', {})
+        }
+
+        if not response['success']:
+            response['config_needed'] = True
+
+    except Exception as e:
+        print(f"❌ Error en /api/social/publish: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ============================
+# LISTAR PÁGINAS CONECTADAS
+# ============================
+@app.route('/api/social/pages', methods=['GET'])
+def list_social_pages_api():
+    try:
+        platform = request.args.get('platform')
+        if platform:
+            pages = db_service.list_social_pages(platform=platform)
+        else:
+            pages = db_service.list_social_pages()
+        return jsonify({'success': True, 'pages': pages})
+    except Exception as e:
+        print(f"❌ Error en /api/social/pages: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)

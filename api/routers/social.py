@@ -114,42 +114,41 @@ async def connect_social_platform(platform: str, request: Request):
 @router.get("/callback/{platform}")
 async def social_callback(platform: str, code: str, state: str = None, request: Request = None):
     """
-    Callback OAuth para recibir tokens
-    
-    La plataforma redirige aquí después de que el usuario autoriza
-    Este callback también LOGUEA al usuario (crea sesión)
-    
-    Usado por: OAuth flow + Login
+    Callback OAuth para recibir tokens y loguear al usuario.
+    Ahora NO llama a /me/accounts (esa lógica está centralizada en exchange_code_for_token)
     """
     try:
-        # Construir redirect_uri (debe ser el mismo que en connect)
+        # Crear redirect_uri
         base_url = str(request.base_url).rstrip('/')
         redirect_uri = f"{base_url}/api/social/callback/{platform}"
-        
-        # Intercambiar code por access_token
+
+        # Intercambiar code -> access_token
         token_data = social_service.exchange_code_for_token(platform, code, redirect_uri)
-        
+
         if not token_data:
-            return RedirectResponse(
-                url=f"/panel/?error=token_exchange_failed&platform={platform}"
-            )
-        
-        # Obtener info del usuario de la plataforma
+            return RedirectResponse(url=f"/panel/?error=token_exchange_failed&platform={platform}")
+
+        # Convertir a long-lived token (solo IG/Facebook)
+        if platform in ['instagram', 'facebook']:
+            print("🔄 Convirtiendo a long-lived token...")
+            long_lived = social_service.exchange_for_long_lived_token(platform, token_data['access_token'])
+            if long_lived:
+                token_data['access_token'] = long_lived
+                print("✅ Token convertido a long-lived")
+
+        # Obtener info del usuario desde la plataforma
         user_info = social_service.get_user_info(platform, token_data['access_token'])
-        
         if not user_info:
-            return RedirectResponse(
-                url=f"/panel/?error=user_info_failed&platform={platform}"
-            )
-        
-        # Crear o actualizar usuario en BD
+            return RedirectResponse(url=f"/panel/?error=user_info_failed&platform={platform}")
+
+        # DB
         from database import SessionLocal
         from db_models import User, SocialToken
         from datetime import datetime
-        
         db = SessionLocal()
+
         try:
-            # Buscar usuario existente por platform_id
+            # --- CREAR O ACTUALIZAR USER ---
             if platform == 'instagram':
                 user = db.query(User).filter(User.instagram_id == user_info['id']).first()
                 if not user:
@@ -158,13 +157,10 @@ async def social_callback(platform: str, code: str, state: str = None, request: 
                         instagram_username=user_info.get('username')
                     )
                     db.add(user)
-                    db.commit()
-                    db.refresh(user)
                 else:
                     user.instagram_username = user_info.get('username')
-                    user.last_login = datetime.utcnow()
-                    db.commit()
-            
+                user.last_login = datetime.utcnow()
+
             elif platform == 'facebook':
                 user = db.query(User).filter(User.facebook_id == user_info['id']).first()
                 if not user:
@@ -173,68 +169,27 @@ async def social_callback(platform: str, code: str, state: str = None, request: 
                         facebook_name=user_info.get('name')
                     )
                     db.add(user)
-                    db.commit()
-                    db.refresh(user)
                 else:
                     user.facebook_name = user_info.get('name')
-                    user.last_login = datetime.utcnow()
-                    db.commit()
-            
-            # Obtener page_id e instagram_account_id para Instagram/Facebook
-            page_id = None
-            instagram_account_id = None
-            
-            print(f"🔍 Platform: {platform}, obteniendo IDs...")
-            
-            if platform == 'instagram' or platform == 'facebook':
-                # Obtener páginas de Facebook del usuario
-                import requests
-                print(f"📡 Consultando páginas de Facebook...")
-                pages_url = f"https://graph.facebook.com/v18.0/me/accounts?access_token={token_data['access_token']}"
-                pages_response = requests.get(pages_url)
-                print(f"📊 Response status: {pages_response.status_code}")
-                
-                if pages_response.status_code == 200:
-                    pages_data = pages_response.json()
-                    print(f"📋 Pages data: {pages_data}")
-                    
-                    # Si no hay páginas (permisos no aprobados), usar fallback del .env
-                    if not pages_data.get('data') or len(pages_data['data']) == 0:
-                        print("⚠️  No se encontraron páginas. Usando IDs del .env como fallback...")
-                        page_id = os.getenv('FACEBOOK_PAGE_ID')
-                        instagram_account_id = os.getenv('INSTAGRAM_BUSINESS_ACCOUNT_ID')
-                        if page_id:
-                            print(f"✅ Usando FACEBOOK_PAGE_ID del .env: {page_id}")
-                        if instagram_account_id:
-                            print(f"✅ Usando INSTAGRAM_BUSINESS_ACCOUNT_ID del .env: {instagram_account_id}")
-                    elif pages_data.get('data') and len(pages_data['data']) > 0:
-                        # Tomar la primera página
-                        page_id = pages_data['data'][0]['id']
-                        
-                        # Obtener Instagram Business Account ID de la página
-                        ig_url = f"https://graph.facebook.com/v18.0/{page_id}?fields=instagram_business_account&access_token={token_data['access_token']}"
-                        ig_response = requests.get(ig_url)
-                        
-                        if ig_response.status_code == 200:
-                            ig_data = ig_response.json()
-                            instagram_account_id = ig_data.get('instagram_business_account', {}).get('id')
-                            print(f"✅ Instagram Business Account ID: {instagram_account_id}")
-                        
-                        print(f"✅ Facebook Page ID: {page_id}")
-            
-            # Guardar/actualizar token
+                user.last_login = datetime.utcnow()
+
+            db.commit()
+            db.refresh(user)
+
+            # --- 🚫 YA NO SE OBTIENEN PÁGINAS AQUÍ ---
+            # page_id e instagram_account_id YA SE GUARDAN en exchange_code_for_token()
+            # Aquí solo actualizamos el token del usuario.
+
             token = db.query(SocialToken).filter(
                 SocialToken.user_id == user.id,
                 SocialToken.platform == platform
             ).first()
-            
+
             if token:
                 token.access_token = token_data['access_token']
                 token.refresh_token = token_data.get('refresh_token')
                 token.expires_at = token_data.get('expires_at')
                 token.username = user_info.get('username') or user_info.get('name')
-                token.page_id = page_id
-                token.instagram_account_id = instagram_account_id
                 token.last_used = datetime.utcnow()
             else:
                 token = SocialToken(
@@ -244,33 +199,27 @@ async def social_callback(platform: str, code: str, state: str = None, request: 
                     refresh_token=token_data.get('refresh_token'),
                     expires_at=token_data.get('expires_at'),
                     username=user_info.get('username') or user_info.get('name'),
-                    page_id=page_id,
-                    instagram_account_id=instagram_account_id
                 )
                 db.add(token)
-            
+
             db.commit()
-            
-            # Crear sesión (LOGIN)
+
+            # Crear sesión LOGIN
             request.session['user_id'] = user.id
             request.session['platform'] = platform
             request.session['username'] = user_info.get('username') or user_info.get('name')
-            
+
             print(f"✅ Usuario {user.id} logueado con {platform}")
-            
-            # Redirigir al panel (ya logueado)
             return RedirectResponse(url="/panel/")
-            
+
         finally:
             db.close()
-        
+
     except Exception as e:
         print(f"❌ Error en callback OAuth: {e}")
         import traceback
         traceback.print_exc()
-        return RedirectResponse(
-            url=f"/panel/?error=callback_failed&platform={platform}"
-        )
+        return RedirectResponse(url=f"/panel/?error=callback_failed&platform={platform}")
 
 @router.post("/refresh/{platform}")
 async def refresh_social_token(platform: str):

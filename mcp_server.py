@@ -13,6 +13,7 @@ from mcp.server.models import InitializationOptions
 from mcp.server import NotificationOptions, Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent, Resource
+import uuid
 
 # Agregar path para importar servicios
 sys.path.append(os.path.join(os.path.dirname(__file__), 'api'))
@@ -48,6 +49,76 @@ content_service = ContentService()
 logger.info("🚀 MCP Server iniciado (modo directo a servicios)")
 
 # ============================================
+# Job Queue (en memoria) para ejecución en background
+# ============================================
+
+JOBS: dict[str, dict] = {}
+JOBS_LOCK = asyncio.Lock()
+# Lock global para escrituras en BD (evita 'database is locked' en SQLite)
+DB_WRITE_LOCK = asyncio.Lock()
+
+async def _create_job(task_coro, job_type: str, args: dict) -> str:
+    job_id = str(uuid.uuid4())
+    async with JOBS_LOCK:
+        JOBS[job_id] = {
+            'id': job_id,
+            'type': job_type,
+            'status': 'queued',
+            'progress': 0,
+            'result': None,
+            'error': None,
+            'args': args,
+            'started_at': None,
+            'ended_at': None,
+            'elapsed_sec': None
+        }
+
+    async def _runner():
+        async with JOBS_LOCK:
+            JOBS[job_id]['status'] = 'running'
+            JOBS[job_id]['started_at'] = asyncio.get_event_loop().time()
+        try:
+            result = await task_coro
+            async with JOBS_LOCK:
+                JOBS[job_id]['status'] = 'succeeded'
+                JOBS[job_id]['progress'] = 100
+                JOBS[job_id]['result'] = result
+                JOBS[job_id]['ended_at'] = asyncio.get_event_loop().time()
+                if JOBS[job_id]['started_at'] is not None:
+                    JOBS[job_id]['elapsed_sec'] = round(JOBS[job_id]['ended_at'] - JOBS[job_id]['started_at'], 3)
+        except asyncio.CancelledError:
+            async with JOBS_LOCK:
+                JOBS[job_id]['status'] = 'canceled'
+                JOBS[job_id]['ended_at'] = asyncio.get_event_loop().time()
+        except Exception as e:
+            logger.error(f"❌ Job {job_id} error: {e}", exc_info=True)
+            async with JOBS_LOCK:
+                JOBS[job_id]['status'] = 'failed'
+                JOBS[job_id]['error'] = str(e)
+                JOBS[job_id]['ended_at'] = asyncio.get_event_loop().time()
+                if JOBS[job_id]['started_at'] is not None:
+                    JOBS[job_id]['elapsed_sec'] = round(JOBS[job_id]['ended_at'] - JOBS[job_id]['started_at'], 3)
+
+    # Lanzar en background
+    asyncio.create_task(_runner())
+    return job_id
+
+async def _get_job(job_id: str) -> dict:
+    async with JOBS_LOCK:
+        return JOBS.get(job_id, None)
+
+async def _cancel_job(job_id: str) -> bool:
+    # Para MVP: marcamos cancelado si está queued/running, no abortamos IO subyacente
+    async with JOBS_LOCK:
+        job = JOBS.get(job_id)
+        if not job:
+            return False
+        if job['status'] in ('queued', 'running'):
+            job['status'] = 'canceled'
+            return True
+        return False
+
+# ============================================
 # TOOLS - Posts
 # ============================================
 
@@ -58,7 +129,7 @@ async def handle_list_tools() -> list[Tool]:
         Tool(
             name="generate_complete_post",
             title="Generate Complete Post",
-            description="🚀 HERRAMIENTA MAESTRA: Genera un post completo de principio a fin. Crea tema (si no se da), genera título y contenido profesional sobre triatlón, crea el post en Google Sheets + Drive, genera prompt de imagen optimizado, genera 4 variaciones de imagen con IA, y guarda todo. Es la forma más rápida de crear contenido de calidad.",
+            description="🚀 HERRAMIENTA MAESTRA: Genera un post completo de principio a fin. Crea tema (si no se da), genera título y contenido profesional sobre triatlón, genera prompt de imagen optimizado, crea 4 variaciones de imagen con IA y guarda todo en storage local. Es la forma más rápida de crear contenido de calidad.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -77,26 +148,40 @@ async def handle_list_tools() -> list[Tool]:
             }
         ),
         Tool(
-            name="list_posts",
-            title="List All Posts",
-            description="Obtiene la lista de todos los posts del blog desde la base de datos local",
+            name="start_generate_image",
+            title="Start Generate Images (Async)",
+            description="Inicia generación de imágenes en background y devuelve job_id inmediatamente",
             inputSchema={
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "codigo": {"type": "string", "description": "Código del post"},
+                    "num_images": {"type": "integer", "description": "Variaciones (1-4)", "default": 4}
+                },
+                "required": ["codigo"]
+            }
+        ),
+        Tool(
+            name="list_posts",
+            title="List Posts",
+            description="Lista posts con soporte de límite y respuesta compacta",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "description": "Máximo de posts a devolver", "default": 50},
+                    "compact": {"type": "boolean", "description": "Devolver formato compacto para el LLM", "default": True}
+                },
                 "required": []
             }
         ),
         Tool(
             name="get_post",
             title="Get Post Details",
-            description="Obtiene los detalles de un post específico por su código",
+            description="Obtiene un post por código. Usa include_files=true para incluir listado de archivos (más lento)",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "codigo": {
-                        "type": "string",
-                        "description": "Código del post (formato: YYYYMMDD-N)"
-                    }
+                    "codigo": {"type": "string", "description": "Código del post (YYYYMMDD-N)"},
+                    "include_files": {"type": "boolean", "description": "Incluir archivos del storage", "default": False}
                 },
                 "required": ["codigo"]
             }
@@ -235,6 +320,63 @@ async def handle_list_tools() -> list[Tool]:
             }
         ),
         Tool(
+            name="start_format_images_for_social",
+            title="Start Format Images for Social (Async)",
+            description="Formatea la imagen base a todos los formatos de redes sociales en background",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "codigo": {"type": "string", "description": "Código del post"}
+                },
+                "required": ["codigo"]
+            }
+        ),
+        Tool(
+            name="start_format_videos_for_social",
+            title="Start Format Videos for Social (Async)",
+            description="Formatea el video base a todos los formatos de redes sociales en background",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "codigo": {"type": "string", "description": "Código del post"}
+                },
+                "required": ["codigo"]
+            }
+        ),
+        Tool(
+            name="start_generate_complete_post",
+            title="Start Generate Complete Post (Async)",
+            description="Inicia la generación de post completo (crear post si falta, prompt e imágenes) en background",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "tema": {"type": "string"},
+                    "categoria": {"type": "string", "enum": ["training", "racing", "training-science"], "default": "training"}
+                },
+                "required": []
+            }
+        ),
+        Tool(
+            name="get_job_status",
+            title="Get Job Status",
+            description="Consulta el estado de un job iniciado en background",
+            inputSchema={
+                "type": "object",
+                "properties": {"job_id": {"type": "string"}},
+                "required": ["job_id"]
+            }
+        ),
+        Tool(
+            name="cancel_job",
+            title="Cancel Job",
+            description="Cancela (mejora mejor esfuerzo) un job en ejecución",
+            inputSchema={
+                "type": "object",
+                "properties": {"job_id": {"type": "string"}},
+                "required": ["job_id"]
+            }
+        ),
+        Tool(
             name="get_social_status",
             title="Get Social Media Status",
             description="Obtiene el estado de todas las conexiones a redes sociales (Instagram, LinkedIn, Twitter, Facebook, TikTok). Muestra si están conectadas, nombre de usuario y fecha de expiración.",
@@ -351,15 +493,27 @@ async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
             logger.info("🚀 Generando post completo...")
             
             try:
-                # Paso 1: Crear post
+                # Paso 1: Crear post (serializado para evitar lock de SQLite)
                 if not tema:
                     tema = "Tema de triatlón generado automáticamente"
-                
-                create_result = await post_service.create_post(
-                    titulo=tema,
-                    categoria=categoria,
-                    idea=tema
-                )
+
+                async with DB_WRITE_LOCK:
+                    # Retry simple contra locks transitorios
+                    create_result = None
+                    last_err = None
+                    for attempt in range(5):
+                        try:
+                            create_result = await post_service.create_post(
+                                titulo=tema,
+                                categoria=categoria,
+                                idea=tema
+                            )
+                            break
+                        except Exception as e:
+                            last_err = e
+                            await asyncio.sleep(1 + attempt * 0.5)
+                    if create_result is None:
+                        raise last_err
                 
                 if not create_result.get('success'):
                     return [TextContent(type="text", text=f"❌ Error creando post: {create_result.get('error')}")]
@@ -392,13 +546,17 @@ async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
         
         elif name == "list_posts":
             logger.info("📋 Listando posts...")
+            limit = arguments.get('limit')
+            compact = arguments.get('compact', True)
             posts = await post_service.list_posts()
-            return [TextContent(
-                type="text",
-                text=f"📋 Posts disponibles ({len(posts)}):\n\n" +
-                     '\n'.join([f"• {p['codigo']}: {p['titulo']} ({p['estado']})" 
-                               for p in posts])
-            )]
+            posts = posts[:limit] if limit else posts
+            if compact:
+                lines = [f"• {p.get('codigo')}: {p.get('titulo','')} ({p.get('estado','')})" for p in posts]
+                body = "\n".join(lines)
+                return [TextContent(type="text", text=f"📋 Posts ({len(posts)}):\n\n{body}")]
+            else:
+                import json
+                return [TextContent(type="text", text=json.dumps(posts, ensure_ascii=False))]
         
         elif name == "create_post":
             titulo = arguments.get('titulo', 'Sin título')
@@ -420,15 +578,39 @@ async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
                     )]
                 else:
                     return [TextContent(type="text", text=f"❌ Error: {result.get('error')}")]
-                    
             except Exception as e:
                 logger.error(f"❌ Error creando post: {str(e)}")
                 return [TextContent(type="text", text=f"❌ Error: {str(e)}")]
+
+        elif name == "start_generate_image":
+            codigo = arguments['codigo']
+            num_images = arguments.get('num_images', 4)
+            logger.info(f"🧵 Start job: generate_image for {codigo} ({num_images})")
+
+            async def _task():
+                from time import monotonic
+                t0 = monotonic()
+                s = monotonic()
+                res = await image_service.generate_image(codigo, num_images)
+                e = monotonic()
+                timeline = [{"step": "generate_images", "ms": int((e - s) * 1000)}]
+                res = dict(res or {})
+                res["timeline"] = timeline
+                res["total_ms"] = int((e - t0) * 1000)
+                return res
+
+            job_id = await _create_job(
+                _task(),
+                job_type="generate_image",
+                args={"codigo": codigo, "num_images": num_images}
+            )
+            return [TextContent(type="text", text=f"🆔 job_id={job_id}")]
         
         elif name == "get_post":
+            include_files = arguments.get('include_files', False)
             post = await post_service.get_post(arguments['codigo'])
             if post:
-                archivos = post.get('archivos', {})
+                archivos = post.get('archivos', {}) if include_files else {}
                 
                 response = f"📋 Post: {post['codigo']}\n"
                 response += f"📝 Título: {post['titulo']}\n"
@@ -437,21 +619,22 @@ async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
                 response += f"📅 Creado: {post.get('fecha_creacion', 'N/A')}\n\n"
                 
                 # Archivos disponibles
-                response += "📁 Archivos disponibles:\n\n"
+                if include_files:
+                    response += "📁 Archivos disponibles:\n\n"
                 
-                if archivos.get('textos'):
+                if include_files and archivos.get('textos'):
                     response += f"📄 Textos ({len(archivos['textos'])}):\n"
                     for archivo in archivos['textos']:
                         response += f"  • {archivo}\n"
                     response += "\n"
                 
-                if archivos.get('imagenes'):
+                if include_files and archivos.get('imagenes'):
                     response += f"🖼️  Imágenes ({len(archivos['imagenes'])}):\n"
                     for archivo in archivos['imagenes']:
                         response += f"  • {archivo}\n"
                     response += "\n"
                 
-                if archivos.get('videos'):
+                if include_files and archivos.get('videos'):
                     response += f"🎬 Videos ({len(archivos['videos'])}):\n"
                     for archivo in archivos['videos']:
                         response += f"  • {archivo}\n"
@@ -573,6 +756,128 @@ async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
                 )]
             else:
                 return [TextContent(type="text", text=f"❌ Error generando imágenes: {images_result.get('error')}")]
+
+        elif name == "start_generate_complete_post":
+            tema = arguments.get('tema')
+            categoria = arguments.get('categoria', 'training')
+            logger.info("🧵 Start job: generate_complete_post")
+
+            async def _task():
+                # Reutiliza la lógica de generate_complete_post
+                from time import monotonic
+                t0 = monotonic()
+                timeline = []
+                def step(label, t_start, t_end):
+                    dur = t_end - t_start
+                    timeline.append({"step": label, "ms": int(dur * 1000)})
+
+                local_tema = tema or "Tema de triatlón generado automáticamente"
+                s = monotonic()
+                # Serializar inserción para evitar lock
+                async with DB_WRITE_LOCK:
+                    create_result = None
+                    last_err = None
+                    for attempt in range(5):
+                        try:
+                            create_result = await post_service.create_post(
+                                titulo=local_tema,
+                                categoria=categoria,
+                                idea=local_tema
+                            )
+                            break
+                        except Exception as e:
+                            last_err = e
+                            await asyncio.sleep(1 + attempt * 0.5)
+                    if create_result is None:
+                        raise last_err
+                e = monotonic(); step("create_post", s, e)
+                if not create_result.get('success'):
+                    return {"success": False, "error": create_result.get('error'), "timeline": timeline, "total_ms": int((e - t0) * 1000)}
+                codigo_local = create_result.get('codigo')
+                s = monotonic()
+                # generar prompt de imagen desde el post
+                instructions_result = await content_service.generate_image_prompt(codigo_local)
+                e = monotonic(); step("generate_image_prompt", s, e)
+                if not instructions_result.get('success'):
+                    return {"success": False, "error": instructions_result.get('error'), "timeline": timeline, "codigo": codigo_local, "total_ms": int((e - t0) * 1000)}
+                s = monotonic()
+                images_result = await image_service.generate_image(codigo_local, num_images=4)
+                e = monotonic(); step("generate_images", s, e)
+                total_ms = int((e - t0) * 1000)
+                return {"success": images_result.get('success', False), "codigo": codigo_local, "images": images_result.get('images', []), "timeline": timeline, "total_ms": total_ms}
+
+            job_id = await _create_job(_task(), job_type="generate_complete_post", args={"tema": tema, "categoria": categoria})
+            return [TextContent(type="text", text=f"🆔 job_id={job_id}")]
+
+        elif name == "start_format_images_for_social":
+            codigo = arguments['codigo']
+            logger.info(f"🧵 Start job: format_images_for_social for {codigo}")
+
+            async def _task():
+                from time import monotonic
+                t0 = monotonic()
+                s = monotonic()
+                res = await image_service.format_images(codigo)
+                e = monotonic()
+                timeline = [{"step": "format_images", "ms": int((e - s) * 1000)}]
+                res = dict(res or {})
+                res["timeline"] = timeline
+                res["total_ms"] = int((e - t0) * 1000)
+                return res
+
+            job_id = await _create_job(_task(), job_type="format_images", args={"codigo": codigo})
+            return [TextContent(type="text", text=f"🆔 job_id={job_id}")]
+
+        elif name == "start_format_videos_for_social":
+            codigo = arguments['codigo']
+            logger.info(f"🧵 Start job: format_videos_for_social for {codigo}")
+
+            async def _task():
+                from time import monotonic
+                t0 = monotonic()
+                s = monotonic()
+                res = await video_service.format_videos(codigo)
+                e = monotonic()
+                timeline = [{"step": "format_videos", "ms": int((e - s) * 1000)}]
+                res = dict(res or {})
+                res["timeline"] = timeline
+                res["total_ms"] = int((e - t0) * 1000)
+                return res
+
+            job_id = await _create_job(_task(), job_type="format_videos", args={"codigo": codigo})
+            return [TextContent(type="text", text=f"🆔 job_id={job_id}")]
+
+        elif name == "get_job_status":
+            job_id = arguments['job_id']
+            job = await _get_job(job_id)
+            if not job:
+                return [TextContent(type="text", text=f"❌ job_id no encontrado: {job_id}")]
+            # Respuesta compacta
+            status = job['status']
+            progress = job.get('progress')
+            started = job.get('started_at')
+            ended = job.get('ended_at')
+            elapsed = job.get('elapsed_sec')
+            # Timeline (si el resultado lo trae)
+            timeline_txt = ""
+            res = job.get('result') or {}
+            tl = res.get('timeline', []) if isinstance(res, dict) else []
+            if tl:
+                lines = [f"  - {t['step']}: {t['ms']} ms" for t in tl if isinstance(t, dict)]
+                total_ms = res.get('total_ms')
+                if total_ms:
+                    lines.append(f"  - total: {total_ms} ms")
+                timeline_txt = "\n" + "\n".join(lines)
+            return [TextContent(type="text", text=(
+                f"status={status}\nprogress={progress}\nresult={bool(job.get('result'))}\nerror={job.get('error') or ''}" +
+                (f"\nelapsed_sec={elapsed}" if elapsed is not None else "") +
+                (timeline_txt)
+            ))]
+
+        elif name == "cancel_job":
+            job_id = arguments['job_id']
+            ok = await _cancel_job(job_id)
+            return [TextContent(type="text", text=("✅ cancelado" if ok else "❌ no cancelado"))]
         
         elif name == "get_social_status":
             logger.info("🔗 Obteniendo estado de redes sociales...")
@@ -691,6 +996,23 @@ async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
 
 async def main():
     """Ejecuta el servidor MCP"""
+    # Prewarm ligero (best effort)
+    try:
+        logger.info("🔥 Prewarming servicios...")
+        async def _warm_anthropic():
+            try:
+                await content_service.chat("ping", [])
+            except Exception as e:
+                logger.debug(f"Anthropic warmup skip: {e}")
+        async def _warm_db():
+            try:
+                await post_service.list_posts(limit=1)
+            except Exception as e:
+                logger.debug(f"DB warmup skip: {e}")
+        await asyncio.gather(_warm_anthropic(), _warm_db())
+    except Exception:
+        pass
+
     async with stdio_server() as (read_stream, write_stream):
         await server.run(
             read_stream,

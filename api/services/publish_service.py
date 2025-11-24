@@ -20,7 +20,8 @@ from services.limits_service import limits_service
 class PublishService:
     """Servicio para publicar contenido en redes sociales"""
     
-    def publish_to_instagram(self, codigo: str, caption: str = None, user_id: int = None) -> Dict:
+    def publish_to_instagram(self, codigo: str, caption: str = None, user_id: int = None,
+                              page_id: str = None, instagram_account_id: str = None) -> Dict:
         """
         Publica en Instagram
         
@@ -43,14 +44,27 @@ class PublishService:
                         'upgrade_required': limit_check.get('upgrade_required', False)
                     }
             
-            # Obtener token
-            tokens = db_service.get_social_tokens()
-            if 'instagram' not in tokens or not tokens['instagram']:
-                return {'success': False, 'error': 'Instagram no está conectado'}
-            
-            token_data = tokens['instagram']
-            access_token = token_data['access_token']
-            instagram_account_id = token_data.get('instagram_account_id')
+            # Obtener token e IDs
+            access_token = None
+            # Si el usuario especifica una página/IG, usar SocialPage
+            if page_id or instagram_account_id:
+                page_rec = None
+                if page_id:
+                    page_rec = db_service.get_social_page_by_page_id(page_id)
+                if not page_rec and instagram_account_id:
+                    page_rec = db_service.get_social_page_by_instagram_id(instagram_account_id)
+                if not page_rec:
+                    return {'success': False, 'error': 'Página/IG seleccionada no encontrada. Reconecta Instagram.'}
+                access_token = page_rec.get('page_access_token')
+                instagram_account_id = page_rec.get('instagram_account_id')
+            else:
+                return {
+                    'success': False,
+                    'error': 'Debes seleccionar una página con Instagram asociado. No se puede usar un token global.'
+                }
+
+            print(f"🔑 Token: {access_token[:50]}...")
+            print(f"📱 Instagram Account ID: {instagram_account_id}")
             
             if not instagram_account_id:
                 return {'success': False, 'error': 'Instagram Business Account ID no disponible. Reconecta Instagram.'}
@@ -70,7 +84,7 @@ class PublishService:
             image_url = f"https://blog.lavelo.es/storage/posts/{codigo}/imagenes/{codigo}_instagram_1x1.png"
             
             # Paso 1: Crear media container
-            create_url = f'https://graph.instagram.com/v18.0/{instagram_account_id}/media'
+            create_url = f'https://graph.facebook.com/v18.0/{instagram_account_id}/media'
             create_data = {
                 'image_url': image_url,
                 'caption': caption,
@@ -86,7 +100,7 @@ class PublishService:
             container_id = response.json()['id']
             
             # Paso 2: Publicar
-            publish_url = f'https://graph.instagram.com/v18.0/{instagram_account_id}/media_publish'
+            publish_url = f'https://graph.facebook.com/v18.0/{instagram_account_id}/media_publish'
             publish_data = {
                 'creation_id': container_id,
                 'access_token': access_token
@@ -115,7 +129,8 @@ class PublishService:
             print(f"❌ Error publicando en Instagram: {e}")
             return {'success': False, 'error': str(e)}
     
-    def publish_to_facebook(self, codigo: str, message: str = None) -> Dict:
+    def publish_to_facebook(self, codigo: str, message: str = None,
+                            page_id: str = None) -> Dict:
         """
         Publica en Facebook
         
@@ -127,14 +142,21 @@ class PublishService:
             Dict con success y post_id o error
         """
         try:
-            # Obtener token (Facebook usa el mismo token que Instagram)
-            tokens = db_service.get_social_tokens()
-            if 'instagram' not in tokens or not tokens['instagram']:
-                return {'success': False, 'error': 'Facebook/Instagram no está conectado'}
-            
-            token_data = tokens['instagram']
-            access_token = token_data['access_token']
-            page_id = token_data.get('page_id')
+            # Obtener token de página
+            access_token = None
+            if page_id:
+                page_rec = db_service.get_social_page_by_page_id(page_id)
+                if not page_rec:
+                    return {'success': False, 'error': 'Página seleccionada no encontrada. Reconecta Facebook/Instagram.'}
+                access_token = page_rec.get('page_access_token')
+            else:
+                # Fallback a token global previo (si existiese)
+                tokens = db_service.get_social_tokens()
+                if 'instagram' not in tokens or not tokens['instagram']:
+                    return {'success': False, 'error': 'Facebook/Instagram no está conectado'}
+                token_data = tokens['instagram']
+                access_token = token_data['access_token']
+                page_id = token_data.get('page_id')
             
             if not page_id:
                 return {'success': False, 'error': 'Facebook Page ID no disponible. Reconecta Facebook/Instagram.'}
@@ -348,7 +370,8 @@ class PublishService:
             print(f"❌ Error publicando en TikTok: {e}")
             return {'success': False, 'error': str(e)}
     
-    def publish_to_all(self, codigo: str, platforms: list = None) -> Dict:
+    def publish_to_all(self, codigo: str, platforms: list = None,
+                       page_id: str = None, instagram_account_id: str = None) -> Dict:
         """
         Publica en múltiples plataformas
         
@@ -368,9 +391,12 @@ class PublishService:
         
         for platform in platforms:
             if platform == 'instagram':
-                results['instagram'] = self.publish_to_instagram(codigo)
+                results['instagram'] = self.publish_to_instagram(codigo,
+                                                                 page_id=page_id,
+                                                                 instagram_account_id=instagram_account_id)
             elif platform == 'facebook':
-                results['facebook'] = self.publish_to_facebook(codigo)
+                results['facebook'] = self.publish_to_facebook(codigo,
+                                                               page_id=page_id)
             elif platform == 'linkedin':
                 results['linkedin'] = self.publish_to_linkedin(codigo)
             elif platform == 'twitter':

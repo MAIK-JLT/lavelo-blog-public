@@ -9,7 +9,14 @@ import logging
 import time
 
 # Cargar variables de entorno
-load_dotenv()
+# 1) Usa ENV_FILE o LAVELO_ENV_FILE si están definidos (p. ej. /var/www/vhosts/<dominio>/private/.env)
+# 2) Si no, hace fallback al .env del repo (../.env) para desarrollo local
+default_env = os.path.join(os.path.dirname(__file__), '..', '.env')
+env_file = os.getenv('ENV_FILE', os.getenv('LAVELO_ENV_FILE', '/var/www/vhosts/blog.lavelo.es/private/.env'))
+if os.path.exists(env_file):
+    load_dotenv(dotenv_path=env_file)
+else:
+    load_dotenv(dotenv_path=default_env)
 
 # Configurar logging
 logging.basicConfig(
@@ -145,7 +152,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=5001,
+        port=5002,
         reload=True,
         log_level="info"
     )

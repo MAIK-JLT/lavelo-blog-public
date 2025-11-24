@@ -6,6 +6,7 @@ from typing import List, Optional, Dict
 from anthropic import Anthropic
 import sys
 import os
+import asyncio
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 import db_service
@@ -74,7 +75,8 @@ Categorías disponibles:
 - training-science: Ciencia del entrenamiento"""
         
         # Llamar a Claude
-        response = self.client.messages.create(
+        response = await asyncio.to_thread(
+            self.client.messages.create,
             model=self.model,
             max_tokens=4096,
             system=system_prompt,
@@ -135,7 +137,8 @@ Categorías disponibles:
                 messages.append({"role": "assistant", "content": response.content})
                 messages.append({"role": "user", "content": tool_use_blocks})
                 
-                follow_up = self.client.messages.create(
+                follow_up = await asyncio.to_thread(
+                    self.client.messages.create,
                     model=self.model,
                     max_tokens=2048,
                     messages=messages
@@ -185,7 +188,8 @@ Texto original:
 
 Genera SOLO el texto adaptado, sin explicaciones ni metadatos."""
             
-            message = self.client.messages.create(
+            message = await asyncio.to_thread(
+                self.client.messages.create,
                 model=self.haiku_model,
                 max_tokens=2000,
                 messages=[{"role": "user", "content": prompt}]
@@ -238,7 +242,8 @@ El prompt debe:
 
 Genera SOLO el prompt de imagen."""
         
-        message = self.client.messages.create(
+        message = await asyncio.to_thread(
+            self.client.messages.create,
             model=self.haiku_model,
             max_tokens=1000,
             messages=[{"role": "user", "content": prompt}]
@@ -357,7 +362,8 @@ INSTRUCCIONES:
 
 Genera SOLO el prompt mejorado, sin explicaciones adicionales."""
 
-        message = self.client.messages.create(
+        message = await asyncio.to_thread(
+            self.client.messages.create,
             model=self.haiku_model,
             max_tokens=2000,
             messages=[{"role": "user", "content": prompt}]

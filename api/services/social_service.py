@@ -139,62 +139,139 @@ class SocialService:
             'state': state
         }
     
-    def exchange_code_for_token(self, platform: str, code: str, redirect_uri: str) -> Optional[Dict]:
-        """
-        Intercambia authorization code por access token
-        
-        Args:
-            platform: Plataforma
-            code: Authorization code
-            redirect_uri: URI de callback
-            
-        Returns:
-            Dict con token_data o None si falla
-        """
-        if platform not in self.oauth_configs:
-            return None
-        
-        config = self.oauth_configs[platform]
-        
-        try:
-            # Preparar request
-            token_params = {
-                'client_id': config['client_id'],
-                'client_secret': config['client_secret'],
-                'code': code,
-                'redirect_uri': redirect_uri,
-                'grant_type': 'authorization_code'
-            }
-            
-            print(f"🔄 Intercambiando code por token ({platform})")
-            
-            response = requests.post(config['token_url'], data=token_params)
-            
-            if response.status_code != 200:
-                print(f"❌ Error en token exchange: {response.text}")
+def exchange_code_for_token(platform, code, current_user_id):
+    """Intercambia el code por un long-lived user token + todas las páginas"""
+
+    try:
+        if platform == 'instagram':
+
+            # IMPORTANT: usar credenciales de la APP DE FACEBOOK
+            fb_client_id = os.getenv('FACEBOOK_CLIENT_ID')
+            fb_client_secret = os.getenv('FACEBOOK_CLIENT_SECRET')
+
+            redirect_uri = request.host_url.rstrip('/') + "/api/social/callback/instagram"
+
+            # === 1) CODE → SHORT TOKEN ===
+            short_resp = requests.get(
+                "https://graph.facebook.com/v21.0/oauth/access_token",
+                params={
+                    "client_id": fb_client_id,
+                    "redirect_uri": redirect_uri,
+                    "client_secret": fb_client_secret,
+                    "code": code
+                }
+            )
+            if short_resp.status_code != 200:
+                print("❌ Error short token:", short_resp.text)
                 return None
-            
-            token_data = response.json()
-            
-            # Obtener info del usuario
-            user_info = self._get_user_info(platform, token_data['access_token'])
-            
-            # Calcular expiración
-            expires_in = token_data.get('expires_in', 3600)
-            expires_at = datetime.now() + timedelta(seconds=expires_in)
-            
+
+            short_token = short_resp.json().get("access_token")
+
+            # === 2) SHORT → LONG TOKEN ===
+            long_resp = requests.get(
+                "https://graph.facebook.com/v21.0/oauth/access_token",
+                params={
+                    "grant_type": "fb_exchange_token",
+                    "client_id": fb_client_id,
+                    "client_secret": fb_client_secret,
+                    "fb_exchange_token": short_token
+                }
+            )
+
+            if long_resp.status_code != 200:
+                print("❌ Error long token:", long_resp.text)
+                return None
+
+            long_json = long_resp.json()
+            user_long_token = long_json["access_token"]
+
+            # === 3) Obtener páginas del usuario ===
+            pages_resp = requests.get(
+                "https://graph.facebook.com/v21.0/me/accounts",
+                params={
+                    "access_token": user_long_token,
+                    "fields": "id,name,access_token,instagram_business_account"
+                }
+            )
+            print("📄 /me/accounts =>", pages_resp.text)
+
+            if pages_resp.status_code != 200:
+                print("❌ Error /me/accounts:", pages_resp.text)
+                return None
+
+            pages_json = pages_resp.json().get("data", [])
+
+            pages_all = []
+            pages_with_ig = []
+
+            for p in pages_json:
+                pid = p.get("id")
+                pname = p.get("name")
+                page_token = p.get("access_token")  # Este ya será EAB...
+                ig_acc = p.get("instagram_business_account", {})
+                ig_id_local = ig_acc.get("id")
+
+                db_service.upsert_social_page({
+                    'user_id': current_user_id,
+                    'platform': 'facebook_page',
+                    'page_id': pid,
+                    'page_name': pname,
+                    'instagram_account_id': ig_id_local,
+                    'page_access_token': page_token,
+                    'expires_at': None
+                })
+
+                row = {
+                    'id': pid,
+                    'name': pname,
+                    'access_token': page_token,
+                    'instagram_id': ig_id_local
+                }
+
+                pages_all.append(row)
+
+                if ig_id_local:
+                    pages_with_ig.append(row)
+
+            if not pages_all:
+                print("⚠️ Usuario sin páginas")
+                return None
+
+            # === 4) Selección
+            selected = pages_with_ig[0] if pages_with_ig else pages_all[0]
+
+            # === 5) Info del usuario ===
+            me_resp = requests.get(
+                "https://graph.facebook.com/v21.0/me",
+                params={"fields": "id,name", "access_token": user_long_token}
+            )
+            if me_resp.status_code == 200:
+                me_json = me_resp.json()
+                user_meta_id = me_json.get("id")
+                username = me_json.get("name")
+            else:
+                user_meta_id = None
+                username = "N/A"
+
+            # === 6) Return ===
             return {
-                'access_token': token_data['access_token'],
-                'refresh_token': token_data.get('refresh_token'),
-                'expires_at': expires_at,  # datetime object, no string
-                'username': user_info.get('username', 'N/A'),
-                'user_id': user_info.get('id'),
-                'connected_at': datetime.now()  # datetime object, no string
+                "access_token": user_long_token,
+                "refresh_token": None,
+                "expires_in": long_json.get("expires_in", 5184000),
+                "username": username,
+                "user_id": user_meta_id,
+                "pages": pages_all,
+                "page_id": selected["id"],
+                "instagram_account_id": selected["instagram_id"],
+                "user_long_lived_token": user_long_token
             }
-            
-        except Exception as e:
-            print(f"❌ Error intercambiando token: {e}")
-            return None
+
+    except Exception as e:
+        print("❌ ERROR TOKEN EXCHANGE:", e)
+        import traceback
+        traceback.print_exc()
+        return None
+
     
     def get_user_info(self, platform: str, access_token: str) -> Dict:
         """
@@ -325,6 +402,45 @@ class SocialService:
             
         except Exception as e:
             print(f"❌ Error renovando token: {e}")
+            return None
+    
+    def exchange_for_long_lived_token(self, platform: str, short_lived_token: str) -> Optional[str]:
+        """
+        Intercambia un short-lived token por uno long-lived (60 días)
+        Solo para Facebook/Instagram
+        
+        Args:
+            platform: Plataforma (instagram o facebook)
+            short_lived_token: Token de corta duración
+            
+        Returns:
+            Long-lived token o None si falla
+        """
+        if platform not in ['instagram', 'facebook']:
+            return None
+        
+        config = self.oauth_configs[platform]
+        
+        try:
+            exchange_url = 'https://graph.facebook.com/v21.0/oauth/access_token'
+            params = {
+                'grant_type': 'fb_exchange_token',
+                'client_id': config['client_id'],
+                'client_secret': config['client_secret'],
+                'fb_exchange_token': short_lived_token
+            }
+            
+            response = requests.get(exchange_url, params=params)
+            
+            if response.status_code != 200:
+                print(f"❌ Error intercambiando por long-lived token: {response.text}")
+                return None
+            
+            data = response.json()
+            return data.get('access_token')
+            
+        except Exception as e:
+            print(f"❌ Error en exchange_for_long_lived_token: {e}")
             return None
     
     def disconnect(self, platform: str) -> bool:
