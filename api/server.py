@@ -4421,7 +4421,7 @@ def disconnect_social_platform(platform):
         description: Plataforma desconectada
     """
     try:
-        sheets_service.delete_social_token(platform)
+        db_service.delete_social_token(platform)
         
         return jsonify({
             'success': True,

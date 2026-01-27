@@ -13,6 +13,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from services.social_service import social_service
 from services.publish_service import PublishService
 import db_service
+from database import DATABASE_URL, IS_PRODUCTION
 
 # Instancia del servicio de publicación
 publish_service = PublishService()
@@ -43,12 +44,40 @@ async def get_current_user(request: Request):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="No autenticado"
         )
-    
-    return {
-        'user_id': user_id,
-        'platform': request.session.get('platform'),
-        'username': request.session.get('username')
-    }
+
+@router.get("/pages")
+async def list_social_pages(platform: str | None = None):
+    """
+    Lista páginas conectadas (Facebook/Instagram) desde la BD.
+    Usado por: Panel (publish.html) para seleccionar la página/IG.
+    """
+    try:
+        if platform:
+            pages = db_service.list_social_pages(platform=platform)
+        else:
+            pages = db_service.list_social_pages()
+        return {"success": True, "pages": pages}
+    except Exception as e:
+        print(f"❌ Error en /api/social/pages: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/debug/db")
+async def debug_db_config():
+    """Devuelve información de la DB actual (enmascarada)."""
+    try:
+        url = str(DATABASE_URL)
+        masked = url
+        # Enmascarar credenciales si existen
+        if '://' in url and '@' in url:
+            scheme, rest = url.split('://', 1)
+            creds, host = rest.split('@', 1)
+            masked = f"{scheme}://***:***@{host}"
+        return {
+            'environment': 'production' if IS_PRODUCTION else 'development',
+            'database_url': masked
+        }
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 @router.post("/logout")
 async def logout(request: Request):

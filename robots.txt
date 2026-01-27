@@ -1,0 +1,22 @@
+# Permitir a todos los bots
+User-agent: *
+Disallow:
+
+# Bots de IA principales
+User-agent: GPTBot
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+# Enlace al sitemap del blog
+Sitemap: https://blog.lavelo.es/sitemap.xml
