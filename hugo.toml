@@ -1,0 +1,21 @@
+baseURL = 'https://blog.lavelo.es/'
+languageCode = 'en-us'
+title = 'Lavelo Cycling Blog'
+theme = ["PaperMod"]
+
+[params]
+  description = "Professional cycling training camps in Costa Blanca"
+  
+[params.homeInfoParams]
+  Title = "Cycling Training Insights"
+  Content = "Expert guides on cycling routes, training, and camps in Costa Blanca"
+
+[menu]
+  [[menu.main]]
+    name = "Training Camps"
+    url = "https://lavelo.es"
+    weight = 1
+  [[menu.main]]
+    name = "Blog"
+    url = "/posts"
+    weight = 2
