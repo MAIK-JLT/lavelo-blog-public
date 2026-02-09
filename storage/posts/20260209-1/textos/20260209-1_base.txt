@@ -1,0 +1,114 @@
+# Glucógeno vs Grasas: Cómo Tu Cuerpo Gestiona la Energía en el Ciclismo
+
+# Glucógeno vs Grasas: Cómo Tu Cuerpo Gestiona la Energía en el Ciclismo
+
+Entender cómo nuestro cuerpo utiliza diferentes fuentes de energía durante el ciclismo es clave para optimizar el rendimiento y la nutrición. El glucógeno muscular, el glucógeno hepático y las grasas trabajan en conjunto para mantener nuestros pedales en movimiento, pero ¿cuándo y cómo se utiliza cada uno?
+
+## Las Tres Fuentes Principales de Energía
+
+### Glucógeno Muscular (Reserva 1)
+El glucógeno muscular es la primera línea de combustible durante el ejercicio intenso. Almacenado directamente en los músculos, proporciona energía rápida y eficiente. Un ciclista entrenado puede almacenar entre 300-600g de glucógeno muscular, equivalente a 1200-2400 kcal.
+
+**Características principales:**
+- Uso preferencial en intensidades superiores al 70% del VO2max
+- Acceso inmediato sin necesidad de transporte
+- Se agota en 60-90 minutos a intensidad moderada-alta
+- Su disponibilidad determina la capacidad de mantener ritmos intensos
+
+### Glucógeno Hepático (Reserva 2)
+El hígado almacena entre 80-120g de glucógeno, principalmente para mantener la glucemia estable. Esta reserva es crucial para el funcionamiento cerebral y la coordinación neuromuscular.
+
+**Función específica:**
+- Mantiene los niveles de glucosa en sangre
+- Esencial para la función cognitiva durante el ejercicio
+- Se libera gradualmente según las demandas
+- Su agotamiento provoca la temida "pájara" o bonking
+
+### Grasas: La Reserva Infinita
+Las grasas representan una fuente prácticamente ilimitada de energía, con más de 50,000 kcal disponibles incluso en atletas delgados. Sin embargo, su metabolización requiere más oxígeno y es menos eficiente a intensidades altas.
+
+## El Continuo Energético: Intensidad y Selección de Combustible
+
+La intensidad del ejercicio determina qué sustrato energético predomina:
+
+### Zona 1-2 (50-65% VO2max): Predominio de Grasas
+- 70-80% energía de grasas
+- Ritmo conversacional, rodajes largos
+- Ideal para entrenar la oxidación de grasas
+- Duración prácticamente ilimitada con nutrición adecuada
+
+### Zona 3 (65-75% VO2max): Transición
+- 50/50 entre grasas y carbohidratos
+- Ritmo tempo o medio
+- Punto de máxima oxidación de grasas (FATmax)
+- Sostenible durante 2-4 horas
+
+### Zona 4-5 (>75% VO2max): Predominio de Glucógeno
+- 70-95% energía del glucógeno
+- Umbral y superiores
+- Agotamiento rápido de reservas
+- Requiere reposición constante de carbohidratos
+
+## El Factor Forma Física: Adaptaciones Metabólicas
+
+El estado de forma modifica significativamente cómo utilizamos estos combustibles:
+
+### Atletas Entrenados
+**Adaptaciones clave:**
+- Mayor densidad mitocondrial = mejor oxidación de grasas
+- Pueden usar grasas a intensidades más altas (hasta 70-75% VO2max)
+- Mayor capacidad de almacenamiento de glucógeno (hasta 700g total)
+- Mejor economía de glucógeno a intensidades submáximas
+
+Un ciclista entrenado puede mantener 200W quemando principalmente grasas, mientras que un principiante necesitaría usar glucógeno significativamente a esa misma potencia.
+
+### Principiantes
+**Características:**
+- Dependencia temprana del glucógeno (desde 60% VO2max)
+- Menor capacidad oxidativa de grasas
+- Reservas de glucógeno más pequeñas (300-400g total)
+- Agotamiento más rápido en esfuerzos prolongados
+
+## Estrategias Prácticas para Optimizar el Uso de Combustible
+
+### Entrenamiento en Ayunas
+Realizar rodajes suaves (Zona 1-2) en ayunas mejora la capacidad de oxidar grasas. Limitar a 60-90 minutos y no más de 2 veces por semana.
+
+### Periodización Nutricional
+- **Días de alto volumen/baja intensidad**: Reducir carbohidratos para estimular adaptaciones
+- **Días de calidad**: Asegurar glucógeno completo para máximo rendimiento
+- **Competición**: Carga de carbohidratos 48h antes
+
+### Durante el Entrenamiento
+- **<60 min**: Agua suficiente
+- **60-120 min**: 30-40g carbohidratos/hora
+- **>120 min**: 60-90g carbohidratos/hora (mezcla glucosa:fructosa 2:1)
+
+### Test del Crossover Point
+Identificar tu punto de cruce (donde pasas de quemar principalmente grasas a carbohidratos) mediante:
+- Test de laboratorio con análisis de gases
+- Observación práctica: intensidad donde necesitas comer cada hora
+- Típicamente ocurre alrededor del 65-75% FCmax en entrenados
+
+## Aplicación en Competición
+
+### Gran Fondo o Marchas Cicloturistas
+- Mantener Zona 2-3 en los primeros 2/3 de la prueba
+- Reservar el glucógeno para el último tercio
+- Nutrición constante: 60-80g carbohidratos/hora
+
+### Criteriums o Carreras Cortas
+- Glucógeno será el combustible principal
+- Asegurar reservas completas pre-carrera
+- 30-60g carbohidratos durante la carrera
+
+## Conclusión
+
+La gestión eficiente de las reservas energéticas marca la diferencia entre completar un entrenamiento con fuerza o sufrir en los últimos kilómetros. La mejora de la forma física no solo aumenta la potencia absoluta, sino que optimiza el uso de combustible, permitiendo ahorrar el preciado glucógeno para cuando realmente se necesita. 
+
+Entrenar específicamente la oxidación de grasas mediante rodajes largos en Zona 2 y estrategias nutricionales apropiadas es tan importante como los intervalos de alta intensidad. Recuerda: el ciclista más rápido no siempre es el más fuerte, sino el que mejor gestiona su energía.
+
+## Referencias
+- Burke, L. M. (2021). "Ketogenic low-CHO, high-fat diet: the future of elite endurance sport?"
+- Stellingwerff, T. & Cox, G. R. (2014). "Systematic review: Carbohydrate supplementation on exercise performance"
+- Coggan, A. R. & Coyle, E. F. (1991). "Carbohydrate ingestion during prolonged exercise"

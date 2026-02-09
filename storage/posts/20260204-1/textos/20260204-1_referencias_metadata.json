@@ -1,0 +1,19 @@
+{
+  "references": [
+    {
+      "filename": "20260204-1_referencia_1.png",
+      "influence": 0.5,
+      "label": "Inspiraci\u00f3n (mood/colores)"
+    }
+  ],
+  "selections": {
+    "perspective": "Primer plano",
+    "lighting": "Amanecer",
+    "style": "Realista",
+    "composition": "Cuadrado",
+    "camera": "Teleobjetivo",
+    "color": "Tonos c\u00e1lidos",
+    "texture": "Met\u00e1lico",
+    "quality": "Ultra realista"
+  }
+}

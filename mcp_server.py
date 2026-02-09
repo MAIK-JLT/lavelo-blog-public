@@ -148,6 +148,20 @@ async def handle_list_tools() -> list[Tool]:
             }
         ),
         Tool(
+            name="create_post",
+            title="Create Post",
+            description="Crea un nuevo post (solo texto base). Genera el código, carpetas y guarda el título e idea inicial.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "titulo": {"type": "string", "description": "Título del post"},
+                    "categoria": {"type": "string", "description": "Categoría (training, racing, training-science)", "default": "training"},
+                    "contenido": {"type": "string", "description": "Contenido/Idea inicial del post"}
+                },
+                "required": ["titulo"]
+            }
+        ),
+        Tool(
             name="start_generate_image",
             title="Start Generate Images (Async)",
             description="Inicia generación de imágenes en background y devuelve job_id inmediatamente",

@@ -12,6 +12,10 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 import db_service
 from services.file_service import file_service
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 class ContentService:
     """Servicio para generar contenido con Claude"""
     
@@ -85,7 +89,12 @@ Categorías disponibles:
         )
         
         # Procesar respuesta
-        assistant_message = response.content[0].text if response.content else ""
+        assistant_message = ""
+        if response.content and hasattr(response.content[0], 'text'):
+            assistant_message = response.content[0].text
+        
+        logger.info(f"🤖 Claude Stop Reason: {response.stop_reason}")
+        
         tool_results = []
         
         # Ejecutar herramientas si Claude las solicita
@@ -96,16 +105,24 @@ Categorías disponibles:
                 if block.type == "tool_use":
                     tool_name = block.name
                     tool_input = block.input
+                    logger.info(f"🛠️ Executing tool: {tool_name}")
                     
                     # Ejecutar herramienta
                     if tool_name == "create_post":
                         from services.post_service import PostService
                         post_service = PostService()
-                        result = await post_service.create_post(
-                            titulo=tool_input['titulo'],
-                            categoria=tool_input['categoria'],
-                            idea=tool_input['contenido']
-                        )
+                        try:
+                            logger.info("   ➡️ Calling post_service.create_post...")
+                            result = await post_service.create_post(
+                                titulo=tool_input['titulo'],
+                                categoria=tool_input['categoria'],
+                                idea=tool_input['contenido']
+                            )
+                            logger.info(f"   ✅ post_service.create_post finished: {result.get('success')}")
+                        except Exception as e:
+                            logger.error(f"   ❌ post_service.create_post failed: {e}")
+                            result = {"success": False, "error": str(e)}
+
                         tool_results.append({
                             'tool': tool_name,
                             'result': result
@@ -119,6 +136,7 @@ Categorías disponibles:
                         })
                     
                     elif tool_name == "list_posts":
+                        logger.info("   ➡️ Calling db_service.get_all_posts...")
                         posts = db_service.get_all_posts()
                         result = {'posts': posts}
                         tool_results.append({
@@ -133,7 +151,16 @@ Categorías disponibles:
                         })
             
             # Segundo llamado a Claude con los resultados de las herramientas
-            if tool_use_blocks:
+            # OPTIMIZACIÓN: Si se creó un post, no llamar a Claude de nuevo para ahorrar tiempo
+            post_created_result = next((r for r in tool_results if r['tool'] == 'create_post' and r['result'].get('success')), None)
+            
+            if post_created_result:
+                post_data = post_created_result['result'].get('post', {})
+                title = post_data.get('titulo', 'Sin título')
+                code = post_data.get('codigo', 'N/A')
+                assistant_message = f"✅ **Post creado exitosamente**\n\n**Título:** {title}\n**Código:** `{code}`\n\nEl post ha sido guardado y ya puedes verlo en el panel. ¿Te gustaría generar las imágenes o adaptar el texto para redes sociales?"
+            
+            elif tool_use_blocks:
                 messages.append({"role": "assistant", "content": response.content})
                 messages.append({"role": "user", "content": tool_use_blocks})
                 
@@ -144,7 +171,8 @@ Categorías disponibles:
                     messages=messages
                 )
                 
-                assistant_message = follow_up.content[0].text if follow_up.content else ""
+                if follow_up.content and hasattr(follow_up.content[0], 'text'):
+                    assistant_message = follow_up.content[0].text
         
         return {
             'success': True,

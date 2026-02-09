@@ -1,0 +1,118 @@
+# Zonas de Entrenamiento y Uso de Combustible en Ciclismo: Grasas vs Glucógeno
+
+## Introducción
+
+Entender qué combustible utiliza tu cuerpo durante el ciclismo es fundamental para optimizar el rendimiento y la planificación nutricional. La capacidad de usar grasas o glucógeno de manera eficiente marca la diferencia entre bonkear en el kilómetro 80 o mantener un ritmo sólido durante 5 horas. Esta guía te ayudará a identificar en qué zona estás entrenando y qué sustrato energético predomina.
+
+## Los Sistemas Energéticos en el Ciclismo
+
+### Las Tres Fuentes Principales
+
+El cuerpo utiliza tres sustratos principales durante el ejercicio:
+- **Grasas**: Fuente casi ilimitada (incluso atletas delgados tienen ~40,000 kcal almacenadas)
+- **Glucógeno muscular**: ~1,500-2,000 kcal almacenadas en músculos
+- **Glucógeno hepático**: ~300-500 kcal almacenadas en el hígado
+
+## Zonas de Intensidad y Uso de Combustible
+
+### Zona 1-2: Base Aeróbica (50-75% FTP)
+**Combustible principal**: 70-85% grasas, 15-30% glucógeno
+
+En estas intensidades, el oxígeno disponible permite la oxidación completa de las grasas. Es la zona ideal para:
+- Rodadas largas de resistencia
+- Recuperación activa
+- Entrenamiento del metabolismo de las grasas
+
+**Señales de que estás en esta zona**:
+- Puedes mantener conversación completa
+- Frecuencia cardíaca 60-75% de FCmax
+- Sensación de poder rodar "todo el día"
+
+### Zona 3: Tempo (75-90% FTP)
+**Combustible**: 35-50% grasas, 50-65% glucógeno
+
+Aquí comienza la transición hacia mayor dependencia del glucógeno. El famoso "crossover point" donde el cuerpo cambia su preferencia de combustible.
+
+**Características**:
+- Respiración rítmica pero controlada
+- Conversación en frases cortas
+- Sostenible por 2-4 horas con nutrición adecuada
+
+### Zona 4-5: Umbral y VO2max (90-120% FTP)
+**Combustible**: 15-25% grasas, 75-85% glucógeno
+
+A estas intensidades, la demanda energética supera la capacidad de oxidar grasas eficientemente. El glucógeno se convierte en el combustible dominante.
+
+**Indicadores**:
+- Respiración laboriosa
+- Hablar es difícil
+- Sensación de "quemazón" en las piernas
+- Duración limitada (20-60 minutos)
+
+### Zona 6-7: Anaeróbica y Neuromuscular (>120% FTP)
+**Combustible**: 5-10% grasas, 90-95% glucógeno (principalmente sistema fosfágeno en esfuerzos muy cortos)
+
+Esfuerzos explosivos que dependen casi exclusivamente de glucógeno y fosfocreatina.
+
+## Diferencias Entre Profesionales y Amateurs
+
+### El Profesional Oxidador de Grasas
+
+Los ciclistas profesionales han desarrollado adaptaciones metabólicas superiores:
+
+**1. Mayor FatMax**: Mientras un amateur puede tener su máxima oxidación de grasas al 45-55% del VO2max, un profesional puede mantenerla hasta 65-75%.
+
+**2. Potencia absoluta superior**: Un profesional puede rodar a 250-300W quemando principalmente grasas, mientras un amateur a esa potencia ya está en zona de umbral quemando glucógeno.
+
+**3. Eficiencia mitocondrial**: Mayor densidad y eficiencia mitocondrial permite oxidar más grasa a intensidades más altas.
+
+### Números Comparativos
+
+**Amateur promedio (FTP: 250W)**:
+- Quema principalmente grasas: <175W (Zona 1-2)
+- Crossover point: ~190W
+- Dependencia de glucógeno: >200W
+
+**Profesional (FTP: 380W)**:
+- Quema principalmente grasas: <280W
+- Crossover point: ~300W
+- Dependencia de glucógeno: >320W
+
+## Estrategias Prácticas para Mejorar
+
+### Entrenamiento en Zona 2
+Dedica 60-70% de tu volumen a zona 2 para:
+- Aumentar la densidad mitocondrial
+- Mejorar la capilarización
+- Elevar tu FatMax
+
+### Entrenamiento en Ayunas
+Sesiones selectivas de 60-90 minutos en ayunas pueden mejorar la oxidación de grasas. **Precaución**: Solo en zona 1-2 y con experiencia previa.
+
+### Periodización Nutricional
+- Días de entrenamiento intenso: Alta disponibilidad de carbohidratos
+- Días de base aeróbica: Moderada restricción de carbohidratos
+- Post-entrenamiento: Siempre reponer glucógeno
+
+### Test Práctico Personal
+Para identificar tu crossover point sin laboratorio:
+1. Usa un medidor de potencia y pulsómetro
+2. Realiza test incremental de 5 minutos por escalón
+3. Nota cuando la respiración pasa de nasal a bucal
+4. Ese punto (~VT1) aproxima tu crossover point
+
+## Aplicación en Competencia
+
+### Gran Fondo o Ruta Larga
+- Primeras 2-3 horas: Mantente en zona 2-3 (preservar glucógeno)
+- Selectividad: Usa zona 4-5 estratégicamente
+- Nutrición: 60-90g carbohidratos/hora desde el inicio
+
+### Criterium o Ruta Corta
+- Calentamiento extenso para activar el metabolismo del glucógeno
+- Acepta que usarás principalmente glucógeno
+- Carga previa de carbohidratos es crucial
+
+## Conclusión
+
+Comprender cuándo tu cuerpo usa grasas o glucógeno te permite entrenar más inteligentemente y competir más efectivamente. La clave está en desarrollar tu capacidad de oxidar grasas a intensidades más altas mediante entrenamiento consistente en zona 2, mientras mantienes la capacidad de usar glucógeno eficientemente para esfuerzos intensos. Recuerda: no se trata de elegir un sustrato sobre otro, sino de optimizar el uso de ambos según las demandas de tu disciplina y objetivos.
