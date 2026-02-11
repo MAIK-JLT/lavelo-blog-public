@@ -215,13 +215,45 @@ async def reset_phases(codigo: str, data: dict):
         
         # Mapeo de estados a checkboxes que deben resetearse
         reset_map = {
-            'BASE_TEXT_AWAITING': ['adapted_texts', 'image_prompt', 'image_base', 'image_formats', 
-                                   'video_script', 'video_base', 'video_formats'],
-            'ADAPTED_TEXTS_AWAITING': ['image_prompt', 'image_base', 'image_formats', 
-                                       'video_script', 'video_base', 'video_formats'],
-            'IMAGE_PROMPT_AWAITING': ['image_base', 'image_formats', 'video_script', 
-                                      'video_base', 'video_formats'],
-            'VIDEO_PROMPT_AWAITING': ['video_base', 'video_formats']
+            # Al tocar base: resetea todo lo derivado
+            'BASE_TEXT_AWAITING': [
+                'instagram_txt', 'linkedin_txt', 'twitter_txt', 'facebook_txt', 'tiktok_txt',
+                'prompt_imagen_base_txt',
+                'imagen_base_png', 'instagram_1x1_png', 'instagram_stories_9x16_png',
+                'linkedin_16x9_png', 'twitter_16x9_png', 'facebook_16x9_png',
+                'script_video_base_txt', 'video_base_mp4',
+                'feed_16x9_mp4', 'stories_9x16_mp4', 'shorts_9x16_mp4', 'tiktok_9x16_mp4'
+            ],
+            # Al tocar textos adaptados: resetea desde prompt en adelante
+            'ADAPTED_TEXTS_AWAITING': [
+                'prompt_imagen_base_txt',
+                'imagen_base_png', 'instagram_1x1_png', 'instagram_stories_9x16_png',
+                'linkedin_16x9_png', 'twitter_16x9_png', 'facebook_16x9_png',
+                'script_video_base_txt', 'video_base_mp4',
+                'feed_16x9_mp4', 'stories_9x16_mp4', 'shorts_9x16_mp4', 'tiktok_9x16_mp4'
+            ],
+            # Al tocar prompt de imagen: resetea imagen base + formatos + video
+            'IMAGE_PROMPT_AWAITING': [
+                'imagen_base_png', 'instagram_1x1_png', 'instagram_stories_9x16_png',
+                'linkedin_16x9_png', 'twitter_16x9_png', 'facebook_16x9_png',
+                'script_video_base_txt', 'video_base_mp4',
+                'feed_16x9_mp4', 'stories_9x16_mp4', 'shorts_9x16_mp4', 'tiktok_9x16_mp4'
+            ],
+            # Al cambiar imagen base: resetea formatos de imagen y video
+            'IMAGE_BASE_AWAITING': [
+                'instagram_1x1_png', 'instagram_stories_9x16_png',
+                'linkedin_16x9_png', 'twitter_16x9_png', 'facebook_16x9_png',
+                'script_video_base_txt', 'video_base_mp4',
+                'feed_16x9_mp4', 'stories_9x16_mp4', 'shorts_9x16_mp4', 'tiktok_9x16_mp4'
+            ],
+            # Al tocar script de video: resetea video base + formatos
+            'VIDEO_PROMPT_AWAITING': [
+                'video_base_mp4', 'feed_16x9_mp4', 'stories_9x16_mp4', 'shorts_9x16_mp4', 'tiktok_9x16_mp4'
+            ],
+            # Al cambiar video base: resetea formatos
+            'VIDEO_BASE_AWAITING': [
+                'feed_16x9_mp4', 'stories_9x16_mp4', 'shorts_9x16_mp4', 'tiktok_9x16_mp4'
+            ]
         }
         
         checkboxes_to_reset = reset_map.get(estado, [])
@@ -296,8 +328,22 @@ async def upload_image(codigo: str, request: Request):
         
         print(f"💾 Imagen guardada: {file_path} ({len(image_bytes) / 1024:.2f} KB)")
         
-        # Actualizar checkbox en BD
-        db_service.update_post(codigo, {'imagen_base_png': True})
+        # Al cambiar imagen base, resetear formatos y fases posteriores
+        db_service.update_post(codigo, {
+            'imagen_base_png': True,
+            'instagram_1x1_png': False,
+            'instagram_stories_9x16_png': False,
+            'linkedin_16x9_png': False,
+            'twitter_16x9_png': False,
+            'facebook_16x9_png': False,
+            'script_video_base_txt': False,
+            'video_base_mp4': False,
+            'feed_16x9_mp4': False,
+            'stories_9x16_mp4': False,
+            'shorts_9x16_mp4': False,
+            'tiktok_9x16_mp4': False,
+            'estado': 'IMAGE_BASE_AWAITING'
+        })
         
         return {
             'success': True,

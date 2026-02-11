@@ -7,6 +7,7 @@ from openai import OpenAI
 import sys
 import os
 import asyncio
+import json
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 import db_service
@@ -25,6 +26,18 @@ class ContentService:
         # Modelo por defecto (puedes sobrescribir con OPENAI_MODEL en .env)
         self.model = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
         self.haiku_model = self.model
+        # Límite de concurrencia para llamadas LLM
+        self.max_parallel = int(os.getenv('OPENAI_MAX_PARALLEL', '3'))
+
+    async def _openai_chat(self, messages, max_tokens=800):
+        """Wrapper async para OpenAI chat completions."""
+        response = await asyncio.to_thread(
+            self.client.chat.completions.create,
+            model=self.model,
+            messages=messages,
+            max_tokens=max_tokens
+        )
+        return response.choices[0].message.content or ""
     
     async def chat(self, message: str, history: List[Dict] = None) -> Dict:
         """
@@ -220,44 +233,73 @@ Categorías disponibles:
         active_platforms = {k: v for k, v in platforms.items() if redes.get(k, True)}
         generated = []
         errors = []
-        
+
         logger.info(f"📝 Generando textos adaptados para {codigo}. Redes: {list(active_platforms.keys())}")
 
-        for platform, description in active_platforms.items():
-            try:
-                prompt = f"""Adapta el siguiente texto para {description}.
+        if not active_platforms:
+            return {
+                'success': True,
+                'generated': [],
+                'message': "✅ No hay redes activas para generar textos"
+            }
+
+        # Una sola llamada a OpenAI que devuelve JSON con cada red
+        networks_list = "\n".join([f"- {k}: {v}" for k, v in active_platforms.items()])
+        prompt = f"""Devuelve un JSON válido con los textos adaptados para cada red social.
+
+Redes y requisitos:
+{networks_list}
 
 Texto original:
 {base_text}
 
-Genera SOLO el texto adaptado, sin explicaciones ni metadatos."""
-                
-                message = await asyncio.to_thread(
-                    self.client.messages.create,
-                    model=self.haiku_model,
-                    max_tokens=2000,
-                    messages=[{"role": "user", "content": prompt}]
-                )
-                
-                adapted_text = message.content[0].text
-                
-                # Guardar archivo
+Reglas:
+- Responde SOLO con JSON válido (sin explicaciones, sin markdown).
+- El JSON debe contener exactamente las claves: {list(active_platforms.keys())}
+- Cada valor debe ser el texto final adaptado y listo para publicar.
+"""
+
+        raw = await self._openai_chat(
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=2400
+        )
+
+        # Parsear JSON (limpiar posibles fences)
+        cleaned = raw.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.strip("`")
+            cleaned = cleaned.replace("json", "", 1).strip()
+
+        try:
+            data = json.loads(cleaned)
+        except Exception as e:
+            logger.error(f"❌ Error parseando JSON de textos adaptados: {e}")
+            errors.append(f"json_parse: {str(e)}")
+            data = {}
+
+        for platform in active_platforms.keys():
+            adapted_text = data.get(platform)
+            if not adapted_text:
+                errors.append(f"{platform}: texto vacío o no generado")
+                continue
+
+            try:
                 filename = f"{codigo}_{platform}.txt"
                 self.file_service.save_file(codigo, 'textos', filename, adapted_text)
-                
-                # Actualizar checkbox en BD
+
                 checkbox_field = f'{platform}_txt'
                 db_service.update_post(codigo, {checkbox_field: True})
-                
+
                 generated.append(filename)
                 logger.info(f"  ✅ {filename} generado")
             except Exception as e:
-                logger.error(f"  ❌ Error generando {platform}: {e}")
+                logger.error(f"  ❌ Error guardando {platform}: {e}")
                 errors.append(f"{platform}: {str(e)}")
         
         return {
             'success': True,
             'generated': generated,
+            'errors': errors,
             'message': f"✅ {len(generated)} textos adaptados generados"
         }
     
@@ -289,14 +331,10 @@ El prompt debe:
 
 Genera SOLO el prompt de imagen."""
         
-        message = await asyncio.to_thread(
-            self.client.messages.create,
-            model=self.haiku_model,
-            max_tokens=1000,
-            messages=[{"role": "user", "content": prompt}]
+        image_prompt = await self._openai_chat(
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=700
         )
-        
-        image_prompt = message.content[0].text
         
         # Guardar archivo
         filename = f"{codigo}_prompt_imagen.txt"
@@ -345,13 +383,10 @@ Escena 4: [descripción]
 
 Genera SOLO el script."""
         
-        message = self.client.messages.create(
-            model=self.haiku_model,
-            max_tokens=1000,
-            messages=[{"role": "user", "content": prompt}]
+        video_script = await self._openai_chat(
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=900
         )
-        
-        video_script = message.content[0].text
         
         # Guardar archivo
         filename = f"{codigo}_script_video.txt"
@@ -409,14 +444,10 @@ INSTRUCCIONES:
 
 Genera SOLO el prompt mejorado, sin explicaciones adicionales."""
 
-        message = await asyncio.to_thread(
-            self.client.messages.create,
-            model=self.haiku_model,
-            max_tokens=2000,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        
-        improved_prompt = message.content[0].text.strip()
+        improved_prompt = (await self._openai_chat(
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=1800
+        )).strip()
         
         print(f"✨ Prompt mejorado ({len(improved_prompt)} chars)")
         

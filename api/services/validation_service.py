@@ -114,8 +114,8 @@ class ValidationService:
             action_result = await self.content_service.generate_image_prompt(codigo)
         
         elif transition['action'] == 'generate_image':
-            # Fase 3: Solo generar 1 imagen base
-            action_result = await self.image_service.generate_image(codigo, num_images=1)
+            # Fase 3: Generar 2 variaciones base
+            action_result = await self.image_service.generate_image(codigo, num_images=2)
         
         elif transition['action'] == 'format_images':
             action_result = await self.image_service.format_images(codigo)

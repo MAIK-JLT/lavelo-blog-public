@@ -269,7 +269,7 @@ async function renderImageBasePhase() {
                     <button class="ai-btn" onclick="generateImageWithAI()" style="font-size: 1.1em; padding: 15px 40px;">
                         🚀 GENERAR IMAGEN CON IA
                     </button>
-                    <p style="color: #999; font-size: 0.85em; margin-top: 10px;">Se generarán 4 variaciones usando SeaDream 4.0</p>
+                    <p style="color: #999; font-size: 0.85em; margin-top: 10px;">Se generarán 2 variaciones usando SeaDream 4.0</p>
                 </div>
                 
                 <div id="generation-progress" style="display: none; text-align: center; margin: 20px 0;">
@@ -282,7 +282,19 @@ async function renderImageBasePhase() {
         `;
     } else {
         // Imagen ya existe, mostrar preview
-        const imageUrl = `${API_BASE}/files/${codigo}/imagenes/${codigo}_imagen_base.png`;
+        const imageUrl = `${API_BASE}/files/${codigo}/imagenes/${codigo}_imagen_base.png?t=${Date.now()}`;
+        const variationsMeta = await fetchFileFromDrive('textos', `${codigo}_imagen_variations.json`);
+        let variations = [];
+        let selectedBase = `${codigo}_imagen_base.png`;
+        if (variationsMeta) {
+            try {
+                const parsed = JSON.parse(variationsMeta);
+                variations = Array.isArray(parsed.generated) ? parsed.generated : [];
+                selectedBase = parsed.selected || selectedBase;
+            } catch (e) {
+                console.error('Error parseando metadata de variaciones:', e);
+            }
+        }
 
         phaseContent.innerHTML = `
             <div class="phase-section">
@@ -303,12 +315,26 @@ async function renderImageBasePhase() {
                     <input type="file" id="upload-image-input-fase4" accept="image/png,image/jpeg,image/jpg" style="display: none;" onchange="handleImageUploadFase4(event)">
                     <div style="text-align: center; margin-top: 20px;">
                         <button class="ai-btn" onclick="regenerarImagenConIA()">🔄 Regenerar con IA</button>
-                        <button class="ai-btn" onclick="generateVariationsWithFalAI()" style="margin-left: 10px;">🎨 Generar 4 Variaciones (Fal.ai)</button>
+                        <button class="ai-btn" onclick="generateVariationsWithFalAI()" style="margin-left: 10px;">🎨 Generar 2 Variaciones (Fal.ai)</button>
                         <button class="ai-btn" onclick="reemplazarImagenManual()" style="margin-left: 10px;">📤 Reemplazar con mi Imagen</button>
                     </div>
-                    <div id="fal-variations-container" style="margin-top: 30px; display: none;">
+                    <div id="fal-variations-container" style="margin-top: 30px; ${variations.length ? 'display: block;' : 'display: none;'}">
                         <h3 style="text-align: center; margin-bottom: 20px;">🎨 Variaciones Generadas con Fal.ai</h3>
-                        <div id="fal-variations-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 20px;"></div>
+                        <div id="fal-variations-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 20px;">
+                            ${variations.map((fname, idx) => {
+                                const vUrl = `/api/files/${codigo}/imagenes/${fname}?t=${Date.now()}`;
+                                const isSelected = fname === selectedBase;
+                                return `
+                                    <div style="text-align: center; padding: 15px; border: 2px solid ${isSelected ? '#16a34a' : '#ddd'}; border-radius: 10px; cursor: pointer; transition: all 0.3s;"
+                                         onclick="selectFalVariation('${fname}', ${idx + 1})"
+                                         onmouseover="this.style.borderColor='#7c3aed'; this.style.transform='scale(1.02)'"
+                                         onmouseout="this.style.borderColor='${isSelected ? '#16a34a' : '#ddd'}'; this.style.transform='scale(1)'">
+                                        <img src="${vUrl}" style="width: 100%; border-radius: 8px;" alt="Variación ${idx + 1}">
+                                        <p style="margin-top: 10px; color: #666; font-weight: bold;">Variación ${idx + 1}${isSelected ? ' ✅' : ''}</p>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
                         <p style="text-align: center; color: #666; font-size: 0.9em;">Haz click en una variación para usarla como imagen base</p>
                     </div>
                     <div id="upload-preview-fase4" style="margin-top: 15px; display: none; text-align: center;">
@@ -328,7 +354,7 @@ async function renderImageBasePhase() {
 async function checkImageExists(folder, filename) {
     try {
         // Verificar en storage local usando el endpoint /api/files/
-        const response = await fetch(`${API_BASE} /files/${codigo} /${folder}/${filename} `);
+    const response = await fetch(`${API_BASE}/files/${codigo}/${folder}/${filename}`);
         return response.ok;
     } catch (error) {
         console.error('Error verificando imagen:', error);
@@ -350,7 +376,7 @@ async function generateImageWithAI() {
         const response = await fetch(`${API_BASE}/generate-image`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ codigo: codigo })
+            body: JSON.stringify({ codigo: codigo, num_images: 2 })
         });
 
         const result = await response.json();
@@ -358,12 +384,12 @@ async function generateImageWithAI() {
         if (progressDiv) progressDiv.style.display = 'none';
 
         if (result.success) {
-            // Mostrar las 4 variaciones generadas
+            // Mostrar las variaciones generadas
             let imagesHTML = '<h3 style="text-align: center; margin-bottom: 20px;">✅ Imágenes Generadas - Selecciona una</h3>';
             imagesHTML += '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">';
 
             result.images.forEach((img, idx) => {
-                const imageUrl = `/api/files/${codigo}/imagenes/${img.filename}`;
+                const imageUrl = `/api/files/${codigo}/imagenes/${img.filename}?t=${Date.now()}`;
                 imagesHTML += `
                     <div style="text-align: center; padding: 15px; border: 2px solid #ddd; border-radius: 10px; cursor: pointer;" onclick="selectGeneratedImage('${img.filename}', ${idx})">
                         <img src="${imageUrl}" style="width: 100%; border-radius: 8px;" alt="Variación ${idx + 1}">
@@ -393,14 +419,30 @@ async function selectGeneratedImage(filename, index) {
     if (!confirm(`¿Usar la Variación ${index + 1} como imagen base?`)) return;
 
     try {
-        // Si no es la primera (imagen_base.png), renombrarla
-        if (filename !== `${codigo}_imagen_base.png`) {
-            // Aquí podrías implementar un endpoint para renombrar, o simplemente recargar
-            showNotification('Imagen seleccionada. Recargando...', 'success');
-            setTimeout(() => location.reload(), 1000);
-        } else {
-            showNotification('Imagen base ya seleccionada', 'success');
-            setTimeout(() => location.reload(), 1000);
+        const response = await fetch(`${API_BASE}/select-base-image`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ codigo, filename })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || 'Error seleccionando imagen');
+        }
+        // Actualizar imagen base en UI sin recargar
+        const mainImg = document.querySelector('img[alt="Imagen base"]');
+        if (mainImg) {
+            mainImg.src = `${API_BASE}/files/${codigo}/imagenes/${codigo}_imagen_base.png?t=${Date.now()}`;
+        }
+        showNotification('Imagen base actualizada', 'success');
+        // Resaltar selección en grid
+        document.querySelectorAll('#fal-variations-grid > div').forEach(card => {
+            card.style.borderColor = '#ddd';
+        });
+        // Si existe el grid, marcar la seleccionada
+        const selectedCard = Array.from(document.querySelectorAll('#fal-variations-grid img'))
+            .find(img => img.src.includes(filename));
+        if (selectedCard && selectedCard.parentElement) {
+            selectedCard.parentElement.style.borderColor = '#16a34a';
         }
     } catch (error) {
         showNotification(`Error: ${error.message}`, 'error');
@@ -430,6 +472,9 @@ async function renderImageFormatsPhase() {
                     <div id="img-container-${format.filename}" style="text-align: center; padding: 15px;">
                         <div class="spinner" style="margin: 20px auto;"></div>
                         <p style="color: #999;">Cargando imagen...</p>
+                    </div>
+                    <div style="text-align: center; margin-top: 10px;">
+                        <a href="${API_BASE}/files/${codigo}/imagenes/${format.filename}" download="${format.filename}" class="ai-btn" style="display: inline-block; text-decoration: none;">⬇️ Descargar</a>
                     </div>
                 </div>
             `).join('')}
@@ -552,6 +597,9 @@ async function renderVideoFormatsPhase() {
                     <div id="video-container-${format.filename}" style="text-align: center; padding: 15px;">
                         <div class="spinner" style="margin: 20px auto;"></div>
                         <p style="color: #999;">Cargando video...</p>
+                    </div>
+                    <div style="text-align: center; margin-top: 10px;">
+                        <a href="${API_BASE}/files/${codigo}/videos/${format.filename}" download="${format.filename}" class="ai-btn" style="display: inline-block; text-decoration: none;">⬇️ Descargar</a>
                     </div>
                 </div>
             `).join('')}
@@ -768,10 +816,7 @@ function cancelar() {
 
 // Volver al panel principal
 function volverAlPanel() {
-    const posts = JSON.parse(localStorage.getItem('posts') || '[]');
-    const postIndex = posts.findIndex(p => p.codigo === codigo);
-    localStorage.setItem('currentPostIndex', postIndex >= 0 ? postIndex : 0);
-    window.location.href = '/panel/';
+    window.location.href = `/panel/?codigo=${codigo}`;
 }
 
 // Utilidades UI
@@ -885,7 +930,7 @@ async function generateVariationsWithFalAI() {
         console.log('Grid:', grid);
         console.log('Button:', btn);
 
-        const confirmResult = confirm('¿Generar 4 variaciones con Fal.ai? Esto costará ~$0.12 (4 imágenes × $0.03)');
+    const confirmResult = confirm('¿Generar 2 variaciones con Fal.ai? Esto costará ~$0.06 (2 imágenes × $0.03)');
         console.log('Confirm result:', confirmResult);
 
         if (!confirmResult) {
@@ -903,12 +948,12 @@ async function generateVariationsWithFalAI() {
         if (grid) grid.innerHTML = '';
 
         console.log('Llamando a API...');
-        alert('Generando 4 variaciones con Fal.ai... Esto puede tardar 30-60 segundos.');
+    alert('Generando 2 variaciones con Fal.ai... Esto puede tardar 30-60 segundos.');
 
         const response = await fetch(`${API_BASE}/generate-image`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ codigo: codigo })
+            body: JSON.stringify({ codigo: codigo, num_images: 2 })
         });
 
         console.log('Response status:', response.status);
@@ -916,11 +961,11 @@ async function generateVariationsWithFalAI() {
         console.log('Result:', result);
 
         if (result.success && result.images) {
-            // Mostrar las 4 variaciones en grid
+            // Mostrar las variaciones en grid
             let gridHTML = '';
 
             result.images.forEach((img, idx) => {
-                const imageUrl = `/api/files/${codigo}/imagenes/${img.filename}`;
+                const imageUrl = `/api/files/${codigo}/imagenes/${img.filename}?t=${Date.now()}`;
                 gridHTML += `
                     <div style="text-align: center; padding: 15px; border: 2px solid #ddd; border-radius: 10px; cursor: pointer; transition: all 0.3s;" 
                          onclick="selectFalVariation('${img.filename}', ${idx + 1})"
@@ -946,7 +991,7 @@ async function generateVariationsWithFalAI() {
         const btn = document.querySelector('button[onclick="generateVariationsWithFalAI()"]');
         if (btn) {
             btn.disabled = false;
-            btn.textContent = '🎨 Generar 4 Variaciones (Fal.ai)';
+            btn.textContent = '🎨 Generar 2 Variaciones (Fal.ai)';
         }
     }
 }
@@ -959,15 +1004,28 @@ async function selectFalVariation(filename, variationNumber) {
 
     try {
         showNotification('Aplicando variación...', 'info');
-
-        // Si no es la primera (imagen_base.png), necesitamos renombrarla
-        if (filename !== `${codigo}_imagen_base.png`) {
-            // Crear endpoint para renombrar o simplemente recargar
-            // Por ahora, simplemente recargamos para que el usuario vea la seleccionada
-            showNotification(`✅ Variación ${variationNumber} seleccionada. Recargando...`, 'success');
-            setTimeout(() => location.reload(), 1500);
-        } else {
-            showNotification('✅ Esta ya es la imagen base actual', 'success');
+        const response = await fetch(`${API_BASE}/select-base-image`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ codigo, filename })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || 'Error seleccionando variación');
+        }
+        const mainImg = document.querySelector('img[alt="Imagen base"]');
+        if (mainImg) {
+            mainImg.src = `${API_BASE}/files/${codigo}/imagenes/${codigo}_imagen_base.png?t=${Date.now()}`;
+        }
+        showNotification(`✅ Variación ${variationNumber} seleccionada`, 'success');
+        // Resaltar selección en grid
+        document.querySelectorAll('#fal-variations-grid > div').forEach(card => {
+            card.style.borderColor = '#ddd';
+        });
+        const selectedCard = Array.from(document.querySelectorAll('#fal-variations-grid img'))
+            .find(img => img.src.includes(filename));
+        if (selectedCard && selectedCard.parentElement) {
+            selectedCard.parentElement.style.borderColor = '#16a34a';
         }
     } catch (error) {
         showNotification(`❌ Error: ${error.message}`, 'error');
@@ -1181,7 +1239,7 @@ function showEditWarning(estado) {
 function cancelWarning() {
     document.getElementById('warning-modal').style.display = 'none';
     // Volver al panel principal
-    window.location.href = '/panel/';
+    window.location.href = `/panel/?codigo=${codigo}`;
 }
 
 // Confirmar edición

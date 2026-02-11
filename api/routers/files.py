@@ -102,6 +102,18 @@ async def save_file(codigo: str, folder: str, filename: str, content: dict):
                     'estado': 'IMAGE_PROMPT_AWAITING'
                 })
                 print(f"✅ Fases de imagen reseteadas, estado → IMAGE_PROMPT_AWAITING")
+
+            # Limpiar imágenes y metadata de variaciones anteriores
+            try:
+                imagenes = file_service.list_files(codigo, 'imagenes')
+                for fname in imagenes:
+                    if fname.startswith(f"{codigo}_imagen_base") and fname.endswith(".png"):
+                        file_service.delete_file(codigo, 'imagenes', fname)
+                # Borrar metadata de variaciones
+                file_service.delete_file(codigo, 'textos', f"{codigo}_imagen_variations.json")
+                print("🧹 Variaciones anteriores eliminadas")
+            except Exception as e:
+                print(f"⚠️ No se pudieron limpiar variaciones: {e}")
         
         return {
             'success': True,

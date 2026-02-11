@@ -14,6 +14,7 @@ const REQUIRE_AUTH = false; // Cambiar a true cuando OAuth esté configurado
 let currentPost = null;
 let currentPostIndex = 0;
 let initialNetworksState = null; // Para detectar cambios en validación
+let urlPostCodigo = null;
 
 // ============================================
 // INICIALIZACIÓN
@@ -34,6 +35,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         currentPostIndex = parseInt(savedIndex);
         localStorage.removeItem('currentPostIndex'); // Limpiar después de usar
     }
+    // Permitir selección por código en URL: /panel/?codigo=YYYYMMDD-N
+    const params = new URLSearchParams(window.location.search);
+    urlPostCodigo = params.get('codigo');
 
     updateCurrentDate();
     initNetworksFilter();
@@ -84,6 +88,21 @@ async function loadPostData() {
         }
 
         localStorage.setItem('posts', JSON.stringify(posts));
+
+        if (urlPostCodigo) {
+            const foundIndex = posts.findIndex(p => p.codigo === urlPostCodigo);
+            if (foundIndex >= 0) {
+                currentPostIndex = foundIndex;
+                // Limpiar query param para evitar confusión en recargas
+                try {
+                    const cleanUrl = window.location.pathname;
+                    window.history.replaceState({}, '', cleanUrl);
+                } catch (e) {
+                    // No bloquear si history falla
+                }
+            }
+        }
+
         const data = posts[currentPostIndex] || posts[0];
         currentPost = data;
 

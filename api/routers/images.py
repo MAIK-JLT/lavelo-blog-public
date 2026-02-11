@@ -11,6 +11,8 @@ import json
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from services.image_service import image_service
+from services.file_service import file_service
+import db_service
 
 router = APIRouter(
     prefix="/api",
@@ -19,10 +21,14 @@ router = APIRouter(
 
 class GenerateImageRequest(BaseModel):
     codigo: str
-    num_images: int = 4
+    num_images: int = 2
 
 class FormatImagesRequest(BaseModel):
     codigo: str
+
+class SelectBaseImageRequest(BaseModel):
+    codigo: str
+    filename: str
 
 @router.post("/generate-image")
 async def generate_image(request: GenerateImageRequest):
@@ -70,6 +76,64 @@ async def upload_image(codigo: str, file: UploadFile = File(...)):
         
         result = await image_service.upload_manual_image(codigo, file.filename, image_bytes)
         return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@router.post("/select-base-image")
+async def select_base_image(request: SelectBaseImageRequest):
+    """
+    Selecciona una variación como imagen base (copia a *_imagen_base.png)
+    
+    Usado por: Panel web (fase 4)
+    """
+    try:
+        codigo = request.codigo
+        filename = request.filename
+
+        if not filename or not filename.endswith(".png"):
+            raise Exception("Filename inválido")
+
+        # Leer variación
+        image_bytes = file_service.read_binary_file(codigo, "imagenes", filename)
+        if not image_bytes:
+            raise Exception("Imagen no encontrada")
+
+        # Guardar como imagen base
+        base_filename = f"{codigo}_imagen_base.png"
+        file_service.save_binary_file(codigo, "imagenes", base_filename, image_bytes)
+
+        # Actualizar metadata de variaciones
+        metadata_filename = f"{codigo}_imagen_variations.json"
+        metadata_text = file_service.read_file(codigo, "textos", metadata_filename)
+        if metadata_text:
+            try:
+                metadata = json.loads(metadata_text)
+                metadata["selected"] = base_filename
+                file_service.save_file(codigo, "textos", metadata_filename, json.dumps(metadata, indent=2))
+            except Exception:
+                pass
+
+        # Al cambiar imagen base, resetear formatos y fases posteriores
+        db_service.update_post(codigo, {
+            "imagen_base_png": True,
+            "instagram_1x1_png": False,
+            "instagram_stories_9x16_png": False,
+            "linkedin_16x9_png": False,
+            "twitter_16x9_png": False,
+            "facebook_16x9_png": False,
+            "script_video_base_txt": False,
+            "video_base_mp4": False,
+            "feed_16x9_mp4": False,
+            "stories_9x16_mp4": False,
+            "shorts_9x16_mp4": False,
+            "tiktok_9x16_mp4": False,
+            "estado": "IMAGE_BASE_AWAITING"
+        })
+
+        return {"success": True, "message": "Imagen base actualizada"}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -142,6 +206,17 @@ async def improve_prompt_visual(
         prompt_filename = f"{codigo}_prompt_imagen.txt"
         file_service.save_file(codigo, 'textos', prompt_filename, improved_prompt)
         print(f"💾 Prompt mejorado guardado: {prompt_filename}")
+
+        # Limpiar imágenes/variaciones anteriores al cambiar prompt
+        try:
+            imagenes = file_service.list_files(codigo, 'imagenes')
+            for fname in imagenes:
+                if fname.startswith(f"{codigo}_imagen_base") and fname.endswith(".png"):
+                    file_service.delete_file(codigo, 'imagenes', fname)
+            file_service.delete_file(codigo, 'textos', f"{codigo}_imagen_variations.json")
+            print("🧹 Variaciones anteriores eliminadas")
+        except Exception as e:
+            print(f"⚠️ No se pudieron limpiar variaciones: {e}")
         
         # Guardar metadata de referencias si existen
         if reference_info:

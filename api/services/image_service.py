@@ -43,7 +43,7 @@ class ImageService:
         if fal_key:
             os.environ['FAL_KEY'] = fal_key
     
-    async def generate_image(self, codigo: str, num_images: int = 4) -> Dict:
+    async def generate_image(self, codigo: str, num_images: int = 2) -> Dict:
         """
         Genera imagen base usando Fal.ai SeaDream 4.0
         Soporta hasta 2 imágenes de referencia
@@ -133,12 +133,9 @@ class ImageService:
                 image_bytes = response.content
                 
                 # Guardar localmente
-                # Primera imagen siempre como imagen_base.png (sobrescribe si existe)
-                # Resto como variaciones (_2, _3, _4)
-                if idx == 1:
-                    filename = f"{codigo}_imagen_base.png"
-                else:
-                    filename = f"{codigo}_imagen_base_{idx}.png"
+                # Guardar como variaciones numeradas
+                # (_1, _2, ...) y copiar _1 a imagen_base.png
+                filename = f"{codigo}_imagen_base_{idx}.png"
                 
                 self.file_service.save_binary_file(codigo, 'imagenes', filename, image_bytes)
                 
@@ -149,15 +146,48 @@ class ImageService:
                 })
                 
                 print(f"  💾 Guardada: {filename}")
+
+        # Copiar la primera variación como imagen base
+        if generated_images:
+            try:
+                first_filename = f"{codigo}_imagen_base_1.png"
+                first_bytes = self.file_service.read_binary_file(codigo, 'imagenes', first_filename)
+                if first_bytes:
+                    self.file_service.save_binary_file(codigo, 'imagenes', f"{codigo}_imagen_base.png", first_bytes)
+            except Exception as e:
+                print(f"⚠️ No se pudo copiar imagen base: {e}")
         
-        # 7. Actualizar checkbox y estado en BD
+        # 7. Guardar metadata de variaciones
+        if generated_images:
+            variations = [img["filename"] for img in generated_images]
+            metadata = {
+                "generated": variations,
+                "selected": f"{codigo}_imagen_base_1.png"
+            }
+            metadata_filename = f"{codigo}_imagen_variations.json"
+            try:
+                file_service.save_file(codigo, "textos", metadata_filename, json.dumps(metadata, indent=2))
+            except Exception as e:
+                print(f"⚠️ No se pudo guardar metadata de variaciones: {e}")
+
+        # 8. Actualizar checkbox en BD y resetear fases posteriores
         if generated_images:
             db_service.update_post(codigo, {
                 'imagen_base_png': True,
-                'estado': 'IMAGE_FORMATS_AWAITING'
+                'instagram_1x1_png': False,
+                'instagram_stories_9x16_png': False,
+                'linkedin_16x9_png': False,
+                'twitter_16x9_png': False,
+                'facebook_16x9_png': False,
+                'script_video_base_txt': False,
+                'video_base_mp4': False,
+                'feed_16x9_mp4': False,
+                'stories_9x16_mp4': False,
+                'shorts_9x16_mp4': False,
+                'tiktok_9x16_mp4': False,
+                'estado': 'IMAGE_BASE_AWAITING'
             })
-            print(f"✅ Checkbox imagen_base actualizado")
-            print(f"✅ Estado actualizado a IMAGE_FORMATS_AWAITING")
+            print(f"✅ Checkbox imagen_base actualizado y fases posteriores reseteadas")
         
         return {
             'success': True,
