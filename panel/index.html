@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,14 +8,17 @@
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/chat.css">
 </head>
+
 <body>
     <div class="container">
-        <div id="mock-banner" style="background: #fff3cd; border: 2px solid #ffc107; padding: 15px; border-radius: 10px; margin-bottom: 20px; text-align: center; display: none;">
-            <strong>🧪 MODO DEMO</strong> - Este es un panel de demostración con datos de ejemplo. Los botones simulan las acciones reales.
+        <div id="mock-banner"
+            style="background: #fff3cd; border: 2px solid #ffc107; padding: 15px; border-radius: 10px; margin-bottom: 20px; text-align: center; display: none;">
+            <strong>🧪 MODO DEMO</strong> - Este es un panel de demostración con datos de ejemplo. Los botones simulan
+            las acciones reales.
         </div>
-        
+
         <header>
-            <h1>🚴 LAVELO BLOG - CONTROL PANEL</h1>
+            <h1 style="color: blue;">🚴 LAVELO BLOG - CONTROL PANEL</h1>
             <p id="current-date"></p>
         </header>
 
@@ -76,12 +80,12 @@
         <div class="phases" id="phases">
             <!-- Las fases se cargarán dinámicamente desde JavaScript -->
         </div>
-        
+
         <!-- Widget de Chat con IA -->
         <button class="chat-fab" onclick="toggleChat()" title="Chat con IA">
             💬
         </button>
-        
+
         <div id="chat-modal" class="chat-modal" style="display: none;">
             <div class="chat-header">
                 <h3>✨ Asistente IA</h3>
@@ -91,13 +95,8 @@
                 <!-- Mensajes del chat -->
             </div>
             <div class="chat-input-container">
-                <input 
-                    type="text" 
-                    id="chat-input" 
-                    class="chat-input" 
-                    placeholder="Escribe tu mensaje..."
-                    autocomplete="off"
-                >
+                <input type="text" id="chat-input" class="chat-input" placeholder="Escribe tu mensaje..."
+                    autocomplete="off">
                 <button class="chat-send" onclick="sendChatMessage()">Enviar</button>
             </div>
         </div>
@@ -114,4 +113,5 @@
     <script src="js/app.js?v=3.0"></script>
     <script src="js/chat.js?v=3.0"></script>
 </body>
+
 </html>
