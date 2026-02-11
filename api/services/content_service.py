@@ -35,7 +35,7 @@ class ContentService:
             self.client.chat.completions.create,
             model=self.model,
             messages=messages,
-            max_tokens=max_tokens
+            max_completion_tokens=max_tokens
         )
         return response.choices[0].message.content or ""
     
@@ -121,7 +121,7 @@ Categorías disponibles:
             model=self.model,
             messages=oa_messages,
             tools=oa_tools,
-            max_tokens=2048
+            max_completion_tokens=2048
         )
 
         assistant_message = ""
@@ -193,7 +193,7 @@ Categorías disponibles:
                     self.client.chat.completions.create,
                     model=self.model,
                     messages=oa_messages,
-                    max_tokens=1024
+                    max_completion_tokens=1024
                 )
                 assistant_message = follow_up.choices[0].message.content or ""
         else:
