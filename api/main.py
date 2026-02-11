@@ -24,7 +24,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),  # Console
-        logging.FileHandler('/tmp/lavelo_api.log')  # Archivo
+        logging.FileHandler('/var/www/vhosts/lavelo.es/blog/logs/lavelo_api.log')  # Archivo
     ]
 )
 logger = logging.getLogger(__name__)
