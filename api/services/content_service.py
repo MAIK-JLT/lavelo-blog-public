@@ -29,7 +29,7 @@ class ContentService:
         # Límite de concurrencia para llamadas LLM
         self.max_parallel = int(os.getenv('OPENAI_MAX_PARALLEL', '3'))
 
-    async def _openai_chat(self, messages, max_tokens=800):
+    async def _openai_chat(self, messages, max_tokens=800, debug_label: str = ""):
         """Wrapper async para OpenAI chat completions."""
         response = await asyncio.to_thread(
             self.client.chat.completions.create,
@@ -37,6 +37,19 @@ class ContentService:
             messages=messages,
             max_completion_tokens=max_tokens
         )
+        # Debug si viene vacío
+        try:
+            choice = response.choices[0]
+            content = getattr(choice.message, "content", "") or ""
+            if not content.strip():
+                logger.warning(
+                    "⚠️ OpenAI devolvió contenido vacío%s | finish_reason=%s model=%s",
+                    f" ({debug_label})" if debug_label else "",
+                    getattr(choice, "finish_reason", None),
+                    self.model,
+                )
+        except Exception as e:
+            logger.warning("⚠️ No se pudo inspeccionar respuesta OpenAI vacía: %s", e)
         return response.choices[0].message.content or ""
     
     async def chat(self, message: str, history: List[Dict] = None) -> Dict:
@@ -333,8 +346,24 @@ Genera SOLO el prompt de imagen."""
         
         image_prompt = await self._openai_chat(
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=700
+            max_tokens=700,
+            debug_label="generate_image_prompt"
         )
+
+        image_prompt = (image_prompt or "").strip()
+
+        # Reintentar una vez si el modelo devuelve vacío
+        if not image_prompt:
+            logger.warning("⚠️ Prompt de imagen vacío, reintentando una vez...")
+            image_prompt = await self._openai_chat(
+                messages=[{"role": "user", "content": prompt + "\n\nReturn a non-empty prompt."}],
+                max_tokens=700,
+                debug_label="generate_image_prompt_retry"
+            )
+            image_prompt = (image_prompt or "").strip()
+
+        if not image_prompt:
+            raise Exception("Prompt de imagen vacío. Reintenta en Fase 3.")
         
         # Guardar archivo
         filename = f"{codigo}_prompt_imagen.txt"
