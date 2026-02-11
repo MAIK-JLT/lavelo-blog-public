@@ -8,42 +8,15 @@ import os
 import logging
 import time
 
-# Cargar variables de entorno con debug robusto
-# 1) Usa ENV_FILE o LAVELO_ENV_FILE si están definidos
-# 2) Si no, hace fallback al .env del repo (../.env)
+# Cargar variables de entorno
+# 1) Usa ENV_FILE o LAVELO_ENV_FILE si están definidos (p. ej. /var/www/vhosts/<dominio>/private/.env)
+# 2) Si no, hace fallback al .env del repo (../.env) para desarrollo local
 default_env = os.path.join(os.path.dirname(__file__), '..', '.env')
-env_file = os.getenv('ENV_FILE', os.getenv('LAVELO_ENV_FILE', default_env))
-
-# Intentar cargar .env
-env_lines = []
+env_file = os.getenv('ENV_FILE', os.getenv('LAVELO_ENV_FILE', '/var/www/vhosts/blog.lavelo.es/private/.env'))
 if os.path.exists(env_file):
     load_dotenv(dotenv_path=env_file)
-    env_source = f"Loaded from {env_file}"
-elif os.path.exists(default_env):
-    load_dotenv(dotenv_path=default_env)
-    env_source = f"Loaded from default {default_env}"
-    env_file = default_env
 else:
-    env_source = "No .env file found!"
-
-# Log de arranque crítico en archivo local (mas fiable que /tmp en hosting compartido)
-try:
-    log_dir = os.path.join(os.path.dirname(__file__), '..', 'logs')
-    os.makedirs(log_dir, exist_ok=True)
-    debug_log = os.path.join(log_dir, 'startup_debug.log')
-    with open(debug_log, 'a') as f:
-        f.write(f"\n--- API STARTUP {time.strftime('%Y-%m-%d %H:%M:%S')} ---\n")
-        f.write(f"CWD: {os.getcwd()}\n")
-        f.write(f"Python: {sys.executable}\n")
-        f.write(f"Env Source: {env_source}\n")
-        f.write(f"ANTHROPIC_KEY present: {'ANTHROPIC_API_KEY' in os.environ}\n")
-        try:
-            import anthropic
-            f.write(f"Anthropic lib: {anthropic.__file__}\n")
-        except ImportError as e:
-            f.write(f"Anthropic lib ERROR: {e}\n")
-except Exception as e:
-    print(f"Error writing debug log: {e}")
+    load_dotenv(dotenv_path=default_env)
 
 # Configurar logging
 logging.basicConfig(
@@ -61,8 +34,7 @@ app = FastAPI(
     description="API para gestión automatizada de contenido de triatlón",
     version="2.0.0",
     docs_url="/api/docs",
-    redoc_url="/api/redoc",
-    openapi_url="/api/openapi.json"
+    redoc_url="/api/redoc"
 )
 
 # Session Middleware (debe ir ANTES de CORS)
