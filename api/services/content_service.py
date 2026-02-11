@@ -392,10 +392,12 @@ Genera SOLO el prompt de imagen."""
         if not base_text:
             raise Exception(f"No se encontró {codigo}_base.txt")
         
+        # Limitar longitud del contenido para evitar cortes por límite
+        base_excerpt = base_text[:3500]
         prompt = f"""Genera un script para un video de 15 segundos sobre este contenido.
 
 Contenido:
-{base_text}
+{base_excerpt}
 
 El script debe:
 - Dividirse en 4 escenas de ~3-4 segundos cada una
@@ -414,8 +416,25 @@ Genera SOLO el script."""
         
         video_script = await self._openai_chat(
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=900
+            max_tokens=1200,
+            debug_label="generate_video_script"
         )
+
+        video_script = (video_script or "").strip()
+
+        # Reintentar una vez si viene vacío
+        if not video_script:
+            logger.warning("⚠️ Script de video vacío, reintentando una vez...")
+            retry_prompt = prompt + "\n\nReturn a non-empty script."
+            video_script = await self._openai_chat(
+                messages=[{"role": "user", "content": retry_prompt}],
+                max_tokens=1200,
+                debug_label="generate_video_script_retry"
+            )
+            video_script = (video_script or "").strip()
+
+        if not video_script:
+            raise Exception("Script de video vacío. Reintenta en Fase 6.")
         
         # Guardar archivo
         filename = f"{codigo}_script_video.txt"
