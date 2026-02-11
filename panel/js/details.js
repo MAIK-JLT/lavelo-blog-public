@@ -26,28 +26,28 @@ async function cargarPost() {
     try {
         const response = await fetch(`${API_BASE}/posts`);
         const data = await response.json();
-        
+
         if (!data.success) {
             throw new Error('Error al cargar posts');
         }
-        
+
         currentPost = data.posts.find(p => p.codigo === codigo);
-        
+
         if (!currentPost) {
             throw new Error('Post no encontrado');
         }
-        
+
         // Actualizar header
         document.getElementById('post-title').textContent = currentPost.titulo;
         document.getElementById('post-codigo').textContent = currentPost.codigo;
-        
+
         const estadoBadge = document.getElementById('post-estado');
         estadoBadge.textContent = currentPost.estado;
         estadoBadge.className = 'status-badge status-awaiting';
-        
+
         // Cargar contenido según fase
         await cargarContenidoFase();
-        
+
     } catch (error) {
         showError(error.message);
     }
@@ -58,16 +58,16 @@ async function cargarContenidoFase() {
     // Usar estadoOverride si existe (para fases validadas), si no, usar el estado del post
     const estado = estadoOverride || currentPost.estado;
     const phaseContent = document.getElementById('phase-content');
-    
+
     // Detectar si la fase está validada (viene de una fase completada)
     phaseIsValidated = estadoOverride ? isPhaseValidated(estado) : false;
-    
+
     // Si está validada y el usuario no ha confirmado, mostrar advertencia
     if (phaseIsValidated && !userConfirmedEdit) {
         showEditWarning(estado);
         return;
     }
-    
+
     try {
         switch (estado) {
             case 'BASE_TEXT_AWAITING':
@@ -108,10 +108,10 @@ async function cargarContenidoFase() {
 // FASE 1: BASE_TEXT_AWAITING
 async function renderBaseTextPhase() {
     const phaseContent = document.getElementById('phase-content');
-    
+
     // Leer archivo base.txt de Drive
     const baseText = await fetchFileFromDrive('textos', `${codigo}_base.txt`);
-    
+
     phaseContent.innerHTML = `
         <div class="phase-section">
             <h2 class="phase-title">📝 Texto Base</h2>
@@ -126,7 +126,7 @@ async function renderBaseTextPhase() {
             </div>
         </div>
     `;
-    
+
     // Detectar cambios
     setupTextEditor('base-text-editor', 'save-base', 'status-base');
 }
@@ -135,7 +135,7 @@ async function renderBaseTextPhase() {
 async function renderAdaptedTextsPhase() {
     const phaseContent = document.getElementById('phase-content');
     phaseContent.innerHTML = '<div class="loading"><div class="spinner"></div><p>Cargando textos adaptados...</p></div>';
-    
+
     const redes = [
         { id: 'instagram', nombre: 'Instagram', icono: '📸' },
         { id: 'linkedin', nombre: 'LinkedIn', icono: '💼' },
@@ -143,12 +143,12 @@ async function renderAdaptedTextsPhase() {
         { id: 'facebook', nombre: 'Facebook', icono: '👥' },
         { id: 'tiktok', nombre: 'TikTok', icono: '🎵' }
     ];
-    
+
     const textos = {};
     for (const red of redes) {
         textos[red.id] = await fetchFileFromDrive('textos', `${codigo}_${red.id}.txt`);
     }
-    
+
     phaseContent.innerHTML = `
         <div class="phase-section">
             <h2 class="phase-title">📱 Textos Adaptados por Red Social</h2>
@@ -165,7 +165,7 @@ async function renderAdaptedTextsPhase() {
             `).join('')}
         </div>
     `;
-    
+
     // Configurar detectores de cambios para cada textarea
     redes.forEach(red => {
         setupTextEditor(`text-${red.id}`, `save-${red.id}`, `status-${red.id}`);
@@ -176,13 +176,13 @@ async function renderAdaptedTextsPhase() {
 async function renderImagePromptPhase() {
     const phaseContent = document.getElementById('phase-content');
     phaseContent.innerHTML = '<div class="loading"><div class="spinner"></div><p>Cargando prompt de imagen...</p></div>';
-    
+
     const promptText = await fetchFileFromDrive('textos', `${codigo}_prompt_imagen.txt`);
-    
+
     // Intentar cargar metadata de referencias
     const metadataText = await fetchFileFromDrive('textos', `${codigo}_referencias_metadata.json`);
     let referencesHTML = '';
-    
+
     if (metadataText) {
         try {
             const metadata = JSON.parse(metadataText);
@@ -193,9 +193,9 @@ async function renderImagePromptPhase() {
                         <p style="color: #666; margin-bottom: 15px;">Estas imágenes se usarán como guía en la generación:</p>
                         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
                             ${metadata.references.map((ref, idx) => {
-                                // Usar storage local
-                                const imageUrl = `${API_BASE}/files/${codigo}/imagenes/${encodeURIComponent(ref.filename)}`;
-                                return `
+                    // Usar storage local
+                    const imageUrl = `${API_BASE}/files/${codigo}/imagenes/${encodeURIComponent(ref.filename)}`;
+                    return `
                                 <div style="text-align: center;">
                                     <img src="${imageUrl}" 
                                          style="max-width: 100%; border-radius: 8px; border: 2px solid #ddd; margin-bottom: 8px; background: #f5f5f5;"
@@ -219,7 +219,7 @@ async function renderImagePromptPhase() {
             console.error('Error parseando metadata de referencias:', e);
         }
     }
-    
+
     phaseContent.innerHTML = `
         <div class="phase-section">
             <h2 class="phase-title">🎨 Prompt de Imagen</h2>
@@ -238,7 +238,7 @@ async function renderImagePromptPhase() {
             ${referencesHTML}
         </div>
     `;
-    
+
     setupTextEditor('prompt-editor', 'save-prompt_imagen', 'status-prompt_imagen');
 }
 
@@ -246,13 +246,13 @@ async function renderImagePromptPhase() {
 async function renderImageBasePhase() {
     const phaseContent = document.getElementById('phase-content');
     phaseContent.innerHTML = '<div class="loading"><div class="spinner"></div><p>Cargando imagen base...</p></div>';
-    
+
     // Obtener el prompt usado
     const promptText = await fetchFileFromDrive('textos', `${codigo}_prompt_imagen.txt`);
-    
+
     // Verificar si ya existe imagen_base.png
     const imageExists = await checkImageExists('imagenes', `${codigo}_imagen_base.png`);
-    
+
     if (!imageExists) {
         // No hay imagen generada, mostrar botón GENERATE
         phaseContent.innerHTML = `
@@ -283,7 +283,7 @@ async function renderImageBasePhase() {
     } else {
         // Imagen ya existe, mostrar preview
         const imageUrl = `${API_BASE}/files/${codigo}/imagenes/${codigo}_imagen_base.png`;
-        
+
         phaseContent.innerHTML = `
             <div class="phase-section">
                 <h2 class="phase-title">🖼️ Imagen Base Generada</h2>
@@ -319,7 +319,7 @@ async function renderImageBasePhase() {
                     </div>
                     <p style="color: #666; font-size: 0.9em; text-align: center; margin-top: 15px;">Si la imagen es correcta, vuelve al panel y haz clic en VALIDATE para generar los formatos.</p>
                 </div>
-            </div>
+            </div >
         `;
     }
 }
@@ -328,7 +328,7 @@ async function renderImageBasePhase() {
 async function checkImageExists(folder, filename) {
     try {
         // Verificar en storage local usando el endpoint /api/files/
-        const response = await fetch(`${API_BASE}/files/${codigo}/${folder}/${filename}`);
+        const response = await fetch(`${API_BASE} /files/${codigo} /${folder}/${filename} `);
         return response.ok;
     } catch (error) {
         console.error('Error verificando imagen:', error);
@@ -341,27 +341,27 @@ async function generateImageWithAI() {
     const progressDiv = document.getElementById('generation-progress');
     const generateBtn = document.querySelector('button[onclick="generateImageWithAI()"]');
     const generatedImagesDiv = document.getElementById('generated-images');
-    
+
     if (generateBtn) generateBtn.disabled = true;
     if (progressDiv) progressDiv.style.display = 'block';
     if (generatedImagesDiv) generatedImagesDiv.innerHTML = '';
-    
+
     try {
         const response = await fetch(`${API_BASE}/generate-image`, {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({codigo: codigo})
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ codigo: codigo })
         });
-        
+
         const result = await response.json();
-        
+
         if (progressDiv) progressDiv.style.display = 'none';
-        
+
         if (result.success) {
             // Mostrar las 4 variaciones generadas
             let imagesHTML = '<h3 style="text-align: center; margin-bottom: 20px;">✅ Imágenes Generadas - Selecciona una</h3>';
             imagesHTML += '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">';
-            
+
             result.images.forEach((img, idx) => {
                 const imageUrl = `/api/files/${codigo}/imagenes/${img.filename}`;
                 imagesHTML += `
@@ -371,12 +371,12 @@ async function generateImageWithAI() {
                     </div>
                 `;
             });
-            
+
             imagesHTML += '</div>';
             imagesHTML += '<p style="text-align: center; color: #666; margin-top: 20px;">Haz click en la imagen que prefieras para usarla como base.</p>';
-            
+
             if (generatedImagesDiv) generatedImagesDiv.innerHTML = imagesHTML;
-            
+
             showNotification(`${result.images.length} imágenes generadas correctamente`, 'success');
         } else {
             throw new Error(result.error || 'Error desconocido');
@@ -391,7 +391,7 @@ async function generateImageWithAI() {
 // Función para seleccionar una imagen generada
 async function selectGeneratedImage(filename, index) {
     if (!confirm(`¿Usar la Variación ${index + 1} como imagen base?`)) return;
-    
+
     try {
         // Si no es la primera (imagen_base.png), renombrarla
         if (filename !== `${codigo}_imagen_base.png`) {
@@ -411,7 +411,7 @@ async function selectGeneratedImage(filename, index) {
 async function renderImageFormatsPhase() {
     const phaseContent = document.getElementById('phase-content');
     phaseContent.innerHTML = '<div class="loading"><div class="spinner"></div><p>Cargando formatos de imagen...</p></div>';
-    
+
     const formats = [
         { name: 'Instagram 1:1', filename: `${codigo}_instagram_1x1.png`, size: '1080x1080' },
         { name: 'Instagram Stories 9:16', filename: `${codigo}_instagram_stories_9x16.png`, size: '1080x1920' },
@@ -419,7 +419,7 @@ async function renderImageFormatsPhase() {
         { name: 'Twitter 16:9', filename: `${codigo}_twitter_16x9.png`, size: '1200x675' },
         { name: 'Facebook 16:9', filename: `${codigo}_facebook_16x9.png`, size: '1200x630' }
     ];
-    
+
     phaseContent.innerHTML = `
         <div class="phase-section">
             <h2 class="phase-title">📱 Formatos de Imagen Generados</h2>
@@ -435,7 +435,7 @@ async function renderImageFormatsPhase() {
             `).join('')}
         </div>
     `;
-    
+
     // Cargar imágenes secuencialmente para evitar problemas de SSL
     for (const format of formats) {
         await loadImageWithRetry(format.filename, `img-container-${format.filename}`, format.name);
@@ -447,17 +447,17 @@ async function renderImageFormatsPhase() {
 // Función auxiliar para cargar imágenes con reintentos
 async function loadImageWithRetry(filename, containerId, altText, maxRetries = 3) {
     const container = document.getElementById(containerId);
-    
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
             const url = `${API_BASE}/files/${codigo}/imagenes/${filename}?t=${Date.now()}`;
-            
+
             // Verificar que la imagen existe antes de mostrarla
             const response = await fetch(url);
             if (response.ok) {
                 const blob = await response.blob();
                 const imageUrl = URL.createObjectURL(blob);
-                
+
                 container.innerHTML = `
                     <img src="${imageUrl}" 
                          alt="${altText}" 
@@ -484,9 +484,9 @@ async function loadImageWithRetry(filename, containerId, altText, maxRetries = 3
 async function renderVideoPromptPhase() {
     const phaseContent = document.getElementById('phase-content');
     phaseContent.innerHTML = '<div class="loading"><div class="spinner"></div><p>Cargando script de video...</p></div>';
-    
+
     const scriptText = await fetchFileFromDrive('textos', `${codigo}_script_video.txt`);
-    
+
     phaseContent.innerHTML = `
         <div class="phase-section">
             <h2 class="phase-title">🎬 Script de Video</h2>
@@ -502,14 +502,14 @@ async function renderVideoPromptPhase() {
             </div>
         </div>
     `;
-    
+
     setupTextEditor('script-editor', 'save-script_video', 'status-script_video');
 }
 
 // FASE 7: VIDEO_BASE_AWAITING
 async function renderVideoBasePhase() {
     const phaseContent = document.getElementById('phase-content');
-    
+
     phaseContent.innerHTML = `
         <div class="phase-section">
             <h2 class="phase-title">🎥 Video Base Generado</h2>
@@ -534,14 +534,14 @@ async function renderVideoBasePhase() {
 // FASE 8: VIDEO_FORMATS_AWAITING
 async function renderVideoFormatsPhase() {
     const phaseContent = document.getElementById('phase-content');
-    
+
     const formats = [
         { name: 'Feed 16:9', filename: `${codigo}_feed_16x9.mp4`, size: '1920x1080' },
         { name: 'Stories 9:16', filename: `${codigo}_stories_9x16.mp4`, size: '1080x1920' },
         { name: 'Shorts 9:16', filename: `${codigo}_shorts_9x16.mp4`, size: '1080x1920' },
         { name: 'TikTok 9:16', filename: `${codigo}_tiktok_9x16.mp4`, size: '1080x1920' }
     ];
-    
+
     phaseContent.innerHTML = `
         <div class="phase-section">
             <h2 class="phase-title">📱 Formatos de Video Generados</h2>
@@ -557,7 +557,7 @@ async function renderVideoFormatsPhase() {
             `).join('')}
         </div>
     `;
-    
+
     // Cargar videos secuencialmente para evitar problemas de SSL
     for (const format of formats) {
         await loadVideoWithRetry(format.filename, `video-container-${format.filename}`, format.name);
@@ -569,17 +569,17 @@ async function renderVideoFormatsPhase() {
 // Función auxiliar para cargar videos con reintentos
 async function loadVideoWithRetry(filename, containerId, altText, maxRetries = 3) {
     const container = document.getElementById(containerId);
-    
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
             const url = `${API_BASE}/files/${codigo}/videos/${filename}?t=${Date.now()}`;
-            
+
             // Verificar que el video existe antes de mostrarlo
             const response = await fetch(url);
             if (response.ok) {
                 const blob = await response.blob();
                 const videoUrl = URL.createObjectURL(blob);
-                
+
                 container.innerHTML = `
                     <video controls style="max-width: 100%; max-height: 500px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.15);">
                         <source src="${videoUrl}" type="video/mp4">
@@ -606,7 +606,7 @@ async function loadVideoWithRetry(filename, containerId, altText, maxRetries = 3
 // FASE 9: READY_TO_PUBLISH
 async function renderReadyToPublishPhase() {
     const phaseContent = document.getElementById('phase-content');
-    
+
     phaseContent.innerHTML = `
         <div class="phase-section">
             <h2 class="phase-title">🚀 Listo para Publicar</h2>
@@ -636,15 +636,15 @@ function setupTextEditor(editorId, saveBtnId, statusId) {
     const editor = document.getElementById(editorId);
     const saveBtn = document.getElementById(saveBtnId);
     const status = document.getElementById(statusId);
-    
+
     if (!editor) return;
-    
+
     const originalValue = editor.dataset.original || '';
-    
+
     editor.addEventListener('input', () => {
         const currentValue = editor.value;
         const hasChanged = currentValue !== originalValue;
-        
+
         if (hasChanged) {
             editor.classList.add('modified');
             saveBtn.classList.add('show');
@@ -662,13 +662,13 @@ async function guardarTextoIndividual(tipo, editorId) {
     const editor = document.getElementById(editorId);
     const saveBtn = document.getElementById(`save-${tipo}`);
     const status = document.getElementById(`status-${tipo}`);
-    
+
     try {
         saveBtn.disabled = true;
         saveBtn.textContent = '⏳ Guardando...';
-        
+
         const content = editor.value;
-        
+
         // Determinar nombre de archivo según tipo
         let filename;
         if (tipo === 'base') {
@@ -680,7 +680,7 @@ async function guardarTextoIndividual(tipo, editorId) {
         } else {
             filename = `${codigo}_${tipo}.txt`;
         }
-        
+
         const response = await fetch(`/api/files/${codigo}/textos/${filename}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -691,19 +691,19 @@ async function guardarTextoIndividual(tipo, editorId) {
                 content: content
             })
         });
-        
+
         if (!response.ok) {
             throw new Error('Error al guardar');
         }
-        
+
         // Actualizar valor original
         editor.dataset.original = content;
         editor.classList.remove('modified');
-        
+
         // Resetear fases dependientes si es prompt de imagen o script de video
         // (siempre, no solo si está validada)
         const shouldReset = tipo === 'prompt_imagen' || tipo === 'script_video' || tipo === 'base';
-        
+
         if (shouldReset || (phaseIsValidated && userConfirmedEdit)) {
             // Determinar el estado correcto según el tipo de archivo editado
             let estadoParaReset = currentPost.estado;
@@ -716,27 +716,27 @@ async function guardarTextoIndividual(tipo, editorId) {
             }
             await resetDependentPhases(estadoParaReset);
         }
-        
+
         // Mostrar confirmación
         saveBtn.classList.remove('show');
         status.classList.add('show');
-        
+
         // Resetear botón
         saveBtn.disabled = false;
         const tipoNombre = tipo === 'base' ? '' : ` ${tipo.charAt(0).toUpperCase() + tipo.slice(1)}`;
         saveBtn.textContent = `💾 Guardar${tipoNombre}`;
-        
+
         // Ocultar confirmación después de 3 segundos
         setTimeout(() => {
             status.classList.remove('show');
         }, 3000);
-        
+
     } catch (error) {
         console.error('Error guardando:', error);
         saveBtn.disabled = false;
         saveBtn.textContent = '❌ Error';
         showError('Error al guardar: ' + error.message);
-        
+
         setTimeout(() => {
             const tipoNombre = tipo === 'base' ? '' : ` ${tipo.charAt(0).toUpperCase() + tipo.slice(1)}`;
             saveBtn.textContent = `💾 Guardar${tipoNombre}`;
@@ -804,17 +804,17 @@ function mejorarConIA(tipo, editorId) {
     // 1. Obtener contenido actual
     const textarea = document.getElementById(editorId);
     const contenidoActual = textarea.value;
-    
+
     if (!contenidoActual || contenidoActual.trim() === '') {
         alert('No hay contenido para mejorar. Por favor, genera primero el contenido.');
         return;
     }
-    
+
     // 2. Abrir chat
     if (typeof toggleChat === 'function') {
         toggleChat();
     }
-    
+
     // 3. Preparar mensaje contextual
     const tipoTexto = tipo === 'prompt_imagen' ? 'prompt de imagen' : 'script de video';
     const mensaje = `Quiero mejorar el ${tipoTexto} del post ${codigo}.
@@ -823,7 +823,7 @@ Contenido actual:
 ${contenidoActual}
 
 ¿Puedes ayudarme a mejorarlo?`;
-    
+
     // 4. Enviar al chat después de un pequeño delay para que se abra
     setTimeout(() => {
         const chatInput = document.getElementById('chat-input');
@@ -841,17 +841,17 @@ ${contenidoActual}
 async function regenerarImagenConIA() {
     // Obtener el prompt actual
     const promptText = await fetchFileFromDrive('textos', `${codigo}_prompt_imagen.txt`);
-    
+
     if (!promptText) {
         alert('No se pudo cargar el prompt actual.');
         return;
     }
-    
+
     // Abrir chat
     if (typeof toggleChat === 'function') {
         toggleChat();
     }
-    
+
     // Mensaje contextual
     const mensaje = `La imagen generada para el post ${codigo} no me convence.
 
@@ -859,7 +859,7 @@ Prompt actual usado:
 ${promptText}
 
 ¿Puedes ayudarme a mejorarlo para regenerar una imagen mejor?`;
-    
+
     // Enviar al chat
     setTimeout(() => {
         const chatInput = document.getElementById('chat-input');
@@ -875,50 +875,50 @@ ${promptText}
 // Generar 4 variaciones con Fal.ai (desde Fase 4)
 async function generateVariationsWithFalAI() {
     console.log('🎨 Iniciando generación de variaciones con Fal.ai...');
-    
+
     try {
         const container = document.getElementById('fal-variations-container');
         const grid = document.getElementById('fal-variations-grid');
         const btn = document.querySelector('button[onclick="generateVariationsWithFalAI()"]');
-        
+
         console.log('Container:', container);
         console.log('Grid:', grid);
         console.log('Button:', btn);
-        
+
         const confirmResult = confirm('¿Generar 4 variaciones con Fal.ai? Esto costará ~$0.12 (4 imágenes × $0.03)');
         console.log('Confirm result:', confirmResult);
-        
+
         if (!confirmResult) {
             console.log('Usuario canceló');
             return;
         }
-        
+
         // Deshabilitar botón y mostrar loading
         if (btn) {
             btn.disabled = true;
             btn.textContent = '⏳ Generando...';
         }
-        
+
         if (container) container.style.display = 'none';
         if (grid) grid.innerHTML = '';
-        
+
         console.log('Llamando a API...');
         alert('Generando 4 variaciones con Fal.ai... Esto puede tardar 30-60 segundos.');
-        
+
         const response = await fetch(`${API_BASE}/generate-image`, {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({codigo: codigo})
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ codigo: codigo })
         });
-        
+
         console.log('Response status:', response.status);
         const result = await response.json();
         console.log('Result:', result);
-        
+
         if (result.success && result.images) {
             // Mostrar las 4 variaciones en grid
             let gridHTML = '';
-            
+
             result.images.forEach((img, idx) => {
                 const imageUrl = `/api/files/${codigo}/imagenes/${img.filename}`;
                 gridHTML += `
@@ -931,10 +931,10 @@ async function generateVariationsWithFalAI() {
                     </div>
                 `;
             });
-            
+
             if (grid) grid.innerHTML = gridHTML;
             if (container) container.style.display = 'block';
-            
+
             alert(`✅ ${result.images.length} variaciones generadas. Haz click en una para usarla.`);
         } else {
             throw new Error(result.error || 'Error desconocido');
@@ -956,10 +956,10 @@ async function selectFalVariation(filename, variationNumber) {
     if (!confirm(`¿Usar la Variación ${variationNumber} como imagen base?\n\nEsto reemplazará la imagen actual.`)) {
         return;
     }
-    
+
     try {
         showNotification('Aplicando variación...', 'info');
-        
+
         // Si no es la primera (imagen_base.png), necesitamos renombrarla
         if (filename !== `${codigo}_imagen_base.png`) {
             // Crear endpoint para renombrar o simplemente recargar
@@ -987,23 +987,23 @@ function reemplazarImagenManual() {
 function handleImageUploadFase4(event) {
     const file = event.target.files[0];
     if (!file) return;
-    
+
     // Validar formato
     const validTypes = ['image/png', 'image/jpeg', 'image/jpg'];
     if (!validTypes.includes(file.type)) {
         alert('Formato no válido. Usa PNG o JPG.');
         return;
     }
-    
+
     // Validar tamaño (10MB)
     const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
         alert('Archivo muy grande. Máximo 10MB.');
         return;
     }
-    
+
     selectedImageFile = file;
-    
+
     // Mostrar preview
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -1025,10 +1025,10 @@ async function confirmarSubidaImagenFase4() {
         alert('No hay imagen seleccionada');
         return;
     }
-    
+
     // Mostrar overlay
     showUploadOverlay('Reemplazando imagen...', 'Guardando imagen, por favor espera...');
-    
+
     try {
         // Convertir imagen a base64
         const reader = new FileReader();
@@ -1037,7 +1037,7 @@ async function confirmarSubidaImagenFase4() {
             reader.onerror = reject;
             reader.readAsDataURL(selectedImageFile);
         });
-        
+
         // Enviar como JSON con base64
         const response = await fetch(`${API_BASE}/posts/${codigo}/upload-image`, {
             method: 'POST',
@@ -1049,11 +1049,11 @@ async function confirmarSubidaImagenFase4() {
                 filename: `${codigo}_imagen_base.png`
             })
         });
-        
+
         const result = await response.json();
-        
+
         hideUploadOverlay();
-        
+
         if (result.success) {
             showSuccess(result.message);
             setTimeout(() => {
@@ -1099,13 +1099,13 @@ const stateToPhase = {
 function isPhaseValidated(estado) {
     const currentPhaseNum = stateToPhase[estado];
     if (!currentPhaseNum) return false;
-    
+
     const post = currentPost;
     if (!post) return false;
-    
+
     // Función helper para convertir a booleano
     const toBool = (val) => val === 1 || val === true || val === 'TRUE' || val === '1';
-    
+
     // Verificar si la fase actual ya fue completada (tiene checkboxes marcados)
     switch (estado) {
         case 'BASE_TEXT_AWAITING':
@@ -1162,18 +1162,18 @@ const resetMap = {
 // Mostrar advertencia antes de editar
 function showEditWarning(estado) {
     const resetPhases = resetMap[estado] || [];
-    
+
     if (resetPhases.length === 0) {
         // No hay fases que resetear, permitir edición directamente
         userConfirmedEdit = true;
         cargarContenidoFase();
         return;
     }
-    
+
     // Mostrar modal con lista de fases que se resetearán
     const resetList = document.getElementById('reset-list');
     resetList.innerHTML = resetPhases.map(phase => `<li>${phase}</li>`).join('');
-    
+
     document.getElementById('warning-modal').style.display = 'flex';
 }
 
@@ -1196,17 +1196,17 @@ async function resetDependentPhases(estadoParaReset) {
     try {
         // Si no se proporciona estado, usar el del post actual
         const estado = estadoParaReset || currentPost.estado;
-        
+
         console.log(`🔄 Reseteando fases dependientes de: ${estado}`);
-        
+
         const response = await fetch(`${API_BASE}/posts/${codigo}/reset-phases`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ estado: estado })
         });
-        
+
         const result = await response.json();
-        
+
         if (result.success) {
             console.log('✅ Fases dependientes reseteadas');
             // Mostrar notificación
@@ -1214,7 +1214,7 @@ async function resetDependentPhases(estadoParaReset) {
         } else {
             console.error('❌ Error reseteando fases:', result.error);
         }
-        
+
     } catch (error) {
         console.error('❌ Error en resetDependentPhases:', error);
     }
@@ -1229,17 +1229,17 @@ function abrirPromptBuilderFromTextarea() {
         // Leer el prompt actual del textarea
         const textarea = document.getElementById('prompt-editor');
         const promptActual = textarea ? textarea.value : '';
-        
+
         // Construir URL con parámetros
         const params = new URLSearchParams({
             codigo: codigo,
             prompt: promptActual
         });
-        
+
         // Abrir en nueva ventana
         const url = `prompt_builder.html?${params.toString()}`;
         const newWindow = window.open(url, '_blank', 'width=1200,height=800');
-        
+
         // Si el navegador bloqueó el popup, abrir en la misma pestaña
         if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
             window.location.href = url;
@@ -1257,11 +1257,11 @@ function abrirPromptBuilder(promptActual) {
             codigo: codigo,
             prompt: promptActual || ''
         });
-        
+
         // Abrir en nueva ventana
         const url = `prompt_builder.html?${params.toString()}`;
         const newWindow = window.open(url, '_blank', 'width=1200,height=800');
-        
+
         // Si el navegador bloqueó el popup, abrir en la misma pestaña
         if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
             window.location.href = url;

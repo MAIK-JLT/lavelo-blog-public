@@ -44,9 +44,10 @@ class ValidationService:
                 'action': 'generate_adapted_texts',
                 'description': 'Generar textos adaptados'
             },
+            # Permitir re-generar textos si ya estamos en esa fase
             'ADAPTED_TEXTS_AWAITING': {
                 'next': 'IMAGE_PROMPT_AWAITING',
-                'action': 'generate_image_prompt',
+                'action': 'generate_image_prompt', # Por defecto avanza
                 'description': 'Generar prompt de imagen'
             },
             'IMAGE_PROMPT_AWAITING': {
@@ -86,7 +87,17 @@ class ValidationService:
             }
         }
         
-        transition = state_transitions.get(current_state)
+        if current_state == 'ADAPTED_TEXTS_AWAITING' and redes:
+             # Si estamos en ADAPTED y enviamos redes, es que queremos RE-GENERAR
+             print(f"🔄 Re-generando textos para: {codigo}")
+             transition = {
+                'next': 'ADAPTED_TEXTS_AWAITING', # Nos quedamos en el mismo estado
+                'action': 'generate_adapted_texts',
+                'description': 'Re-generar textos adaptados'
+             }
+        else:
+            transition = state_transitions.get(current_state)
+            
         if not transition:
             raise Exception(f'Estado {current_state} no reconocido')
         

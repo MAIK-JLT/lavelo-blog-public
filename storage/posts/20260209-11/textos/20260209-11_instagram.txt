@@ -1,0 +1,43 @@
+📡 ANT+ vs BLUETOOTH: ¿Cuál necesitas realmente?
+
+Como triatleta, tus sensores son tus mejores aliados. Pero ¿entiendes cómo se comunican con tus dispositivos? 
+
+🔴 ANT+ - EL ESPECIALISTA
+✨ Diseñado específicamente para deportistas
+✨ Un sensor → múltiples dispositivos simultáneos
+✨ Perfecto para relojes GPS y ciclocomputadores
+⚠️ Requiere hardware específico (tu móvil probablemente NO lo tiene)
+
+🔵 BLUETOOTH - EL UNIVERSAL
+✨ Está en TODOS tus dispositivos (móvil, tablet, ordenador)
+✨ Mayor alcance (10m vs 5m)
+✨ Ideal para apps como Zwift desde smartphone
+⚠️ Tradicionalmente solo 1 conexión (mejorando con BLE 5.0)
+
+💪 LA BUENA NOTICIA
+¡La mayoría de sensores modernos son DUAL-BAND!
+
+Potenciómetros como Garmin Rally, Wahoo POWRLINK, Favero Assioma o Quarq transmiten en AMBOS protocolos simultáneamente.
+
+Pulsómetros como Garmin HRM-Pro, Polar H10 o Wahoo TICKR también son dual-band.
+
+🎯 TU ESTRATEGIA GANADORA:
+
+📱 Entrenas con apps indoor → Bluetooth es más cómodo
+💻 Usas PC para Zwift → Dongle ANT+ (más estable)
+⌚ Solo reloj GPS → Cualquiera funciona perfecto
+🏁 Múltiples dispositivos → ANT+ es el rey
+🏆 En competición → ANT+ (menos interferencias)
+
+🔋 BATERÍA: Ambos son súper eficientes
+• Potenciómetros: 200-300h en dual-band
+• Pulsómetros: 300-500h con batería de botón
+
+✅ CONCLUSIÓN
+La "guerra" terminó. Los mejores sensores ahora son DUAL-BAND = flexibilidad total.
+
+Al comprar nuevo equipo, busca la compatibilidad doble. Pero recuerda: lo importante no es el protocolo, sino la CONSISTENCIA de tus datos para entrenar mejor.
+
+💬 ¿Tu setup actual usa ANT+ o Bluetooth? ¡Cuéntanos en comentarios!
+
+#Triatlon #TriathlonTraining #CiclismoDePotencia #ANTplus #Bluetooth #TechTriathlon #Potenciometro #Pulsometro #EntrenamientoInteligente #TriathlonTech #GarminConnect #Zwift #WahooFitness

@@ -24,7 +24,7 @@ class ContentService:
         self.client = Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
         # Usar los modelos más recientes: Claude 4.5 (Sep 2025)
         self.model = os.getenv('CLAUDE_MODEL', 'claude-sonnet-4-5-20250929')
-        self.haiku_model = 'claude-haiku-4-5-20251001'  # Haiku 4.5 más reciente
+        self.haiku_model = self.model  # Usar Sonnet para todo (mejor calidad)
     
     async def chat(self, message: str, history: List[Dict] = None) -> Dict:
         """
@@ -207,34 +207,41 @@ Categorías disponibles:
         # Filtrar solo plataformas activas
         active_platforms = {k: v for k, v in platforms.items() if redes.get(k, True)}
         generated = []
+        errors = []
         
+        logger.info(f"📝 Generando textos adaptados para {codigo}. Redes: {list(active_platforms.keys())}")
+
         for platform, description in active_platforms.items():
-            prompt = f"""Adapta el siguiente texto para {description}.
+            try:
+                prompt = f"""Adapta el siguiente texto para {description}.
 
 Texto original:
 {base_text}
 
 Genera SOLO el texto adaptado, sin explicaciones ni metadatos."""
-            
-            message = await asyncio.to_thread(
-                self.client.messages.create,
-                model=self.haiku_model,
-                max_tokens=2000,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            
-            adapted_text = message.content[0].text
-            
-            # Guardar archivo
-            filename = f"{codigo}_{platform}.txt"
-            self.file_service.save_file(codigo, 'textos', filename, adapted_text)
-            
-            # Actualizar checkbox en BD
-            checkbox_field = f'{platform}_txt'
-            db_service.update_post(codigo, {checkbox_field: True})
-            
-            generated.append(filename)
-            print(f"  ✅ {filename} generado")
+                
+                message = await asyncio.to_thread(
+                    self.client.messages.create,
+                    model=self.haiku_model,
+                    max_tokens=2000,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                
+                adapted_text = message.content[0].text
+                
+                # Guardar archivo
+                filename = f"{codigo}_{platform}.txt"
+                self.file_service.save_file(codigo, 'textos', filename, adapted_text)
+                
+                # Actualizar checkbox en BD
+                checkbox_field = f'{platform}_txt'
+                db_service.update_post(codigo, {checkbox_field: True})
+                
+                generated.append(filename)
+                logger.info(f"  ✅ {filename} generado")
+            except Exception as e:
+                logger.error(f"  ❌ Error generando {platform}: {e}")
+                errors.append(f"{platform}: {str(e)}")
         
         return {
             'success': True,
