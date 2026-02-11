@@ -1,0 +1,116 @@
+# HRV en Ciclismo: El Nuevo Indicador que Revoluciona el Entrenamiento
+
+## Introducción
+
+La Variabilidad de la Frecuencia Cardíaca (HRV por sus siglas en inglés) se ha convertido en la métrica de moda entre ciclistas y triatletas. Pero más allá de ser una tendencia, este indicador ofrece información valiosa sobre nuestro estado de recuperación y preparación para el entrenamiento. Entender qué es el HRV y cómo aplicarlo en tu planificación ciclista puede marcar la diferencia entre el progreso y el sobreentrenamiento.
+
+## ¿Qué es la Variabilidad de la Frecuencia Cardíaca?
+
+El HRV mide la variación en el tiempo entre latidos consecutivos del corazón. Contrario a lo que podría pensarse, un corazón saludable no late de forma perfectamente regular como un metrónomo, sino que presenta pequeñas variaciones constantes entre cada latido.
+
+Estas variaciones están controladas por el sistema nervioso autónomo, específicamente por el equilibrio entre el sistema simpático (acelerador) y parasimpático (freno). Un HRV alto generalmente indica un sistema nervioso equilibrado y buena capacidad de adaptación, mientras que un HRV bajo puede señalar estrés, fatiga o necesidad de recuperación.
+
+## ¿Por Qué es Importante para Ciclistas?
+
+En el ciclismo, especialmente en triatlón donde se acumula el estrés de tres disciplinas, la gestión de la carga de entrenamiento es crucial. El HRV nos proporciona:
+
+### Información Objetiva sobre Recuperación
+
+A diferencia de sensaciones subjetivas que pueden engañarnos, el HRV ofrece datos objetivos sobre si tu cuerpo está listo para un entrenamiento intenso o necesita recuperación adicional.
+
+### Prevención del Sobreentrenamiento
+
+Monitorizar tendencias de HRV ayuda a detectar estados de sobreentrenamiento antes de que se conviertan en problemas serios que requieran semanas de descanso.
+
+### Optimización de la Carga
+
+Permite ajustar la intensidad del entrenamiento día a día, maximizando las adaptaciones cuando el cuerpo está preparado y evitando cavar un hoyo de fatiga innecesario.
+
+## Cómo Medir el HRV Correctamente
+
+La medición consistente es clave para obtener datos útiles:
+
+**Momento de Medición**: Siempre al despertar, antes de levantarte de la cama. El estado de reposo garantiza mediciones comparables.
+
+**Posición**: Mantén la misma posición cada día, preferiblemente tumbado o sentado.
+
+**Duración**: La mayoría de apps requieren entre 1-5 minutos de medición.
+
+**Herramientas**: Puedes usar:
+- Pulsómetros con banda torácica (más precisos)
+- Dispositivos ópticos de muñeca (menos precisos pero aceptables)
+- Apps como HRV4Training, Elite HRV o Whoop
+
+**Consistencia**: Mide todos los días a la misma hora para establecer tu línea base personal.
+
+## Interpretando tus Datos de HRV
+
+No existe un número "bueno" universal de HRV. Lo importante es tu tendencia personal:
+
+### Establece tu Línea Base
+
+Durante 2-4 semanas, mide diariamente para conocer tu rango normal. Algunos ciclistas tienen valores de 30-50ms, otros de 80-120ms. Ambos pueden ser normales.
+
+### Observa Tendencias, No Valores Absolutos
+
+Un descenso del 20% respecto a tu media es más significativo que el número exacto. Por ejemplo, si tu media es 60ms y un día mides 48ms, es señal de alerta.
+
+### Códigos de Color
+
+Muchas apps usan semáforos:
+- **Verde**: HRV normal o alto - Luz verde para entrenamientos intensos
+- **Amarillo**: HRV ligeramente bajo - Entrenamientos moderados
+- **Rojo**: HRV significativamente bajo - Prioriza recuperación
+
+## Aplicación Práctica al Entrenamiento en Bici
+
+### Planificación Semanal Flexible
+
+Si tenías planeada una sesión de intervalos pero tu HRV está en rojo, considera:
+- Cambiar a rodaje de recuperación
+- Hacer trabajo técnico de baja intensidad
+- Tomar un día completo de descanso
+
+### Periodización Adaptativa
+
+En lugar de seguir un plan rígido, ajusta tu microciclo según las lecturas:
+- HRV alto consistente: Tu cuerpo tolera bien la carga, puedes mantener o aumentar intensidad
+- HRV descendente progresiva: Reduce volumen/intensidad antes de llegar a sobreentrenamiento
+
+### Ejemplo Práctico
+
+**Lunes**: HRV en verde (65ms, tu media es 62ms)
+- Procede con serie de intervalos 5x5min en umbral planificada
+
+**Martes**: HRV en amarillo (52ms)
+- Reduce a rodaje aeróbico en zona 2, mantén duración pero elimina intensidad
+
+**Miércoles**: HRV en rojo (45ms)
+- Día de descanso activo o completamente libre
+
+**Jueves**: HRV vuelve a verde (61ms)
+- Retoma entrenamientos de calidad
+
+## Factores que Afectan el HRV
+
+Más allá del entrenamiento, otros elementos impactan tu HRV:
+
+- **Sueño**: La mala calidad o pocas horas reducen dramáticamente el HRV
+- **Alcohol**: Incluso cantidades moderadas lo deprimen
+- **Estrés laboral/personal**: Se refleja directamente en las mediciones
+- **Nutrición**: Déficits calóricos agresivos impactan negativamente
+- **Enfermedad**: Un HRV bajo persistente puede preceder síntomas de resfriado
+
+## Conclusión
+
+El HRV no es solo una moda pasajera, es una herramienta científicamente validada que te ayuda a entrenar de forma más inteligente. Para ciclistas y triatletas, representa el puente entre el entrenamiento planificado y la capacidad real del cuerpo para asimilarlo.
+
+La clave está en usarlo como guía, no como dictador absoluto. Combina los datos de HRV con tus sensaciones, tu plan de entrenamiento y tus objetivos. Con el tiempo, desarrollarás intuición sobre cómo responde tu cuerpo y tomarás mejores decisiones de entrenamiento.
+
+Recuerda: el mejor entrenamiento no es el más duro, sino el que tu cuerpo puede asimilar y del cual puede adaptarse positivamente. El HRV es tu aliado para encontrar ese equilibrio perfecto.
+
+## Referencias
+
+- Buchheit, M. (2014). Monitoring training status with HR measures: Do all roads lead to Rome?
+- Plews, D. J., et al. (2013). Training adaptation and heart rate variability in elite endurance athletes
+- Stanley, J., et al. (2013). Cardiac parasympathetic reactivation following exercise in endurance athletes

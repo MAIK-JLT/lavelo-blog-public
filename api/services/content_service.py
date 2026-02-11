@@ -3,7 +3,7 @@ Servicio de generación de contenido con Claude
 Usado por: MCP Server, Panel Web, API REST
 """
 from typing import List, Optional, Dict
-from anthropic import Anthropic
+from openai import OpenAI
 import sys
 import os
 import asyncio
@@ -21,10 +21,10 @@ class ContentService:
     
     def __init__(self):
         self.file_service = file_service
-        self.client = Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
-        # Usar los modelos más recientes: Claude 4.5 (Sep 2025)
-        self.model = os.getenv('CLAUDE_MODEL', 'claude-sonnet-4-5-20250929')
-        self.haiku_model = self.model  # Usar Sonnet para todo (mejor calidad)
+        self.client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+        # Modelo por defecto (puedes sobrescribir con OPENAI_MODEL en .env)
+        self.model = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
+        self.haiku_model = self.model
     
     async def chat(self, message: str, history: List[Dict] = None) -> Dict:
         """
@@ -78,101 +78,113 @@ Categorías disponibles:
 - racing: Carreras y competición
 - training-science: Ciencia del entrenamiento"""
         
-        # Llamar a Claude
-        response = await asyncio.to_thread(
-            self.client.messages.create,
-            model=self.model,
-            max_tokens=4096,
-            system=system_prompt,
-            tools=tools,
-            messages=messages
-        )
-        
-        # Procesar respuesta
-        assistant_message = ""
-        if response.content and hasattr(response.content[0], 'text'):
-            assistant_message = response.content[0].text
-        
-        logger.info(f"🤖 Claude Stop Reason: {response.stop_reason}")
-        
-        tool_results = []
-        
-        # Ejecutar herramientas si Claude las solicita
-        if response.stop_reason == "tool_use":
-            tool_use_blocks = []
-            
-            for block in response.content:
-                if block.type == "tool_use":
-                    tool_name = block.name
-                    tool_input = block.input
-                    logger.info(f"🛠️ Executing tool: {tool_name}")
-                    
-                    # Ejecutar herramienta
-                    if tool_name == "create_post":
-                        from services.post_service import PostService
-                        post_service = PostService()
-                        try:
-                            logger.info("   ➡️ Calling post_service.create_post...")
-                            result = await post_service.create_post(
-                                titulo=tool_input['titulo'],
-                                categoria=tool_input['categoria'],
-                                idea=tool_input['contenido']
-                            )
-                            logger.info(f"   ✅ post_service.create_post finished: {result.get('success')}")
-                        except Exception as e:
-                            logger.error(f"   ❌ post_service.create_post failed: {e}")
-                            result = {"success": False, "error": str(e)}
+        # Convertir history a formato OpenAI
+        oa_messages = [{"role": "system", "content": system_prompt}]
+        for m in messages:
+            if m.get("role") in ("user", "assistant"):
+                oa_messages.append({"role": m["role"], "content": m.get("content", "")})
 
-                        tool_results.append({
-                            'tool': tool_name,
-                            'result': result
-                        })
-                        
-                        # Guardar bloque para segundo llamado
-                        tool_use_blocks.append({
-                            "type": "tool_result",
-                            "tool_use_id": block.id,
-                            "content": str(result)
-                        })
-                    
-                    elif tool_name == "list_posts":
-                        logger.info("   ➡️ Calling db_service.get_all_posts...")
-                        posts = db_service.get_all_posts()
-                        result = {'posts': posts}
-                        tool_results.append({
-                            'tool': tool_name,
-                            'result': result
-                        })
-                        
-                        tool_use_blocks.append({
-                            "type": "tool_result",
-                            "tool_use_id": block.id,
-                            "content": str(result)
-                        })
-            
-            # Segundo llamado a Claude con los resultados de las herramientas
-            # OPTIMIZACIÓN: Si se creó un post, no llamar a Claude de nuevo para ahorrar tiempo
+        oa_tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "create_post",
+                    "description": tools[0]["description"],
+                    "parameters": tools[0]["input_schema"]
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "list_posts",
+                    "description": tools[1]["description"],
+                    "parameters": tools[1]["input_schema"]
+                }
+            }
+        ]
+
+        response = await asyncio.to_thread(
+            self.client.chat.completions.create,
+            model=self.model,
+            messages=oa_messages,
+            tools=oa_tools,
+            max_tokens=2048
+        )
+
+        assistant_message = ""
+        tool_results = []
+
+        choice = response.choices[0]
+        message_obj = choice.message
+        tool_calls = getattr(message_obj, "tool_calls", None)
+
+        if tool_calls:
+            for call in tool_calls:
+                tool_name = call.function.name
+                tool_input = call.function.arguments
+                logger.info(f"🛠️ Executing tool: {tool_name}")
+
+                if tool_name == "create_post":
+                    from services.post_service import PostService
+                    post_service = PostService()
+                    try:
+                        import json
+                        parsed = json.loads(tool_input) if isinstance(tool_input, str) else tool_input
+                        logger.info("   ➡️ Calling post_service.create_post...")
+                        result = await post_service.create_post(
+                            titulo=parsed['titulo'],
+                            categoria=parsed['categoria'],
+                            idea=parsed['contenido']
+                        )
+                        logger.info(f"   ✅ post_service.create_post finished: {result.get('success')}")
+                    except Exception as e:
+                        logger.error(f"   ❌ post_service.create_post failed: {e}")
+                        result = {"success": False, "error": str(e)}
+
+                    tool_results.append({"tool": tool_name, "result": result})
+
+                elif tool_name == "list_posts":
+                    logger.info("   ➡️ Calling db_service.get_all_posts...")
+                    posts = db_service.get_all_posts()
+                    result = {'posts': posts}
+                    tool_results.append({"tool": tool_name, "result": result})
+
             post_created_result = next((r for r in tool_results if r['tool'] == 'create_post' and r['result'].get('success')), None)
-            
             if post_created_result:
                 post_data = post_created_result['result'].get('post', {})
                 title = post_data.get('titulo', 'Sin título')
                 code = post_data.get('codigo', 'N/A')
                 assistant_message = f"✅ **Post creado exitosamente**\n\n**Título:** {title}\n**Código:** `{code}`\n\nEl post ha sido guardado y ya puedes verlo en el panel. ¿Te gustaría generar las imágenes o adaptar el texto para redes sociales?"
-            
-            elif tool_use_blocks:
-                messages.append({"role": "assistant", "content": response.content})
-                messages.append({"role": "user", "content": tool_use_blocks})
-                
+            else:
+                import json
+                oa_messages.append({
+                    "role": "assistant",
+                    "content": message_obj.content or "",
+                    "tool_calls": [
+                        {
+                            "id": call.id,
+                            "type": "function",
+                            "function": {"name": call.function.name, "arguments": call.function.arguments}
+                        } for call in tool_calls
+                    ]
+                })
+                for tr in tool_results:
+                    oa_messages.append({
+                        "role": "tool",
+                        "tool_call_id": next((c.id for c in tool_calls if c.function.name == tr["tool"]), ""),
+                        "name": tr["tool"],
+                        "content": json.dumps(tr["result"])
+                    })
+
                 follow_up = await asyncio.to_thread(
-                    self.client.messages.create,
+                    self.client.chat.completions.create,
                     model=self.model,
-                    max_tokens=2048,
-                    messages=messages
+                    messages=oa_messages,
+                    max_tokens=1024
                 )
-                
-                if follow_up.content and hasattr(follow_up.content[0], 'text'):
-                    assistant_message = follow_up.content[0].text
+                assistant_message = follow_up.choices[0].message.content or ""
+        else:
+            assistant_message = message_obj.content or ""
         
         return {
             'success': True,
