@@ -8,8 +8,8 @@ const isProduction = window.location.hostname !== 'localhost' && window.location
 // IMPORTANTE: FastAPI requiere barra final en las rutas
 const API_BASE = isProduction ? '/api' : 'http://localhost:5001/api';
 
-// MODO DESARROLLO: Deshabilitar autenticación temporalmente
-const REQUIRE_AUTH = false; // Cambiar a true cuando OAuth esté configurado
+// Autenticación obligatoria
+const REQUIRE_AUTH = true;
 
 let currentPost = null;
 let currentPostIndex = 0;
@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     urlPostCodigo = params.get('codigo');
 
     updateCurrentDate();
+    initAuthUI();
     initNetworksFilter();
     loadPostData();
     setTimeout(() => addPostSelector(), 1000);
@@ -48,7 +49,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Verificar si el usuario está autenticado
 async function checkAuth() {
     try {
-        const response = await fetch(`${API_BASE}/social/me`, {
+        const response = await fetch(`${API_BASE}/auth/me`, {
             credentials: 'include'
         });
 
@@ -58,6 +59,18 @@ async function checkAuth() {
 
         const user = await response.json();
         console.log('✅ Usuario autenticado:', user);
+        window.__authUser = user?.user;
+        updateAuthUser(user?.user);
+        // Si cambia el usuario, limpiar estado local para evitar mezclar posts
+        const newUserId = user?.user?.id ?? null;
+        const storedUserId = localStorage.getItem('currentUserId');
+        if (newUserId && storedUserId && storedUserId !== String(newUserId)) {
+            localStorage.removeItem('posts');
+            localStorage.removeItem('currentPostIndex');
+        }
+        if (newUserId) {
+            localStorage.setItem('currentUserId', String(newUserId));
+        }
         return true;
     } catch (error) {
         console.error('Error verificando autenticación:', error);
@@ -71,6 +84,10 @@ async function checkAuth() {
 async function loadPostData() {
     try {
         const response = await fetch(`${API_BASE}/posts/`, { credentials: 'include' });
+        if (response.status === 401) {
+            window.location.href = '/panel/login.html';
+            return;
+        }
         const result = await response.json();
 
         if (result.error) {
@@ -89,6 +106,13 @@ async function loadPostData() {
 
         localStorage.setItem('posts', JSON.stringify(posts));
 
+        if (posts.length === 0) {
+            currentPost = null;
+            renderEmptyState();
+            addPostSelector();
+            return;
+        }
+
         if (urlPostCodigo) {
             const foundIndex = posts.findIndex(p => p.codigo === urlPostCodigo);
             if (foundIndex >= 0) {
@@ -100,6 +124,11 @@ async function loadPostData() {
                 } catch (e) {
                     // No bloquear si history falla
                 }
+                // Usar el código solo una vez
+                urlPostCodigo = null;
+            } else {
+                // Si no se encuentra, no forzar más
+                urlPostCodigo = null;
             }
         }
 
@@ -116,6 +145,175 @@ async function loadPostData() {
     } catch (error) {
         showError('Error al cargar datos del servidor');
         console.error(error);
+    }
+}
+
+function renderEmptyState() {
+    const postInfo = document.getElementById('post-info');
+    const phases = document.getElementById('phases');
+    const progress = document.getElementById('progress');
+    if (postInfo) {
+        postInfo.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+                <h2 style="margin:0;">No hay posts todavía</h2>
+                <button class="btn btn-primary" onclick="createNewPost()">➕ Crear Nuevo Post</button>
+            </div>
+            <p style="margin-top:8px; color:#666;">Crea tu primer post con el asistente IA.</p>
+        `;
+    }
+    if (phases) {
+        phases.innerHTML = '';
+    }
+    if (progress) {
+        progress.style.width = '0%';
+        progress.textContent = '0%';
+    }
+    // Resetear redes
+    const checkboxes = document.querySelectorAll('input[type="checkbox"][id^="network-"]:not(#network-blog)');
+    checkboxes.forEach(cb => {
+        cb.checked = false;
+        cb.disabled = true;
+    });
+    const warning = document.getElementById('networks-warning');
+    if (warning) warning.style.display = 'none';
+}
+
+// ============================================
+// AUTH UI + SYSTEM PROMPT
+// ============================================
+function initAuthUI() {
+    const header = document.querySelector('header');
+    if (!header) return;
+
+    let toolsBar = document.getElementById('auth-tools-bar');
+    if (toolsBar) return;
+
+    toolsBar = document.createElement('div');
+    toolsBar.id = 'auth-tools-bar';
+    toolsBar.style.display = 'flex';
+    toolsBar.style.gap = '10px';
+    toolsBar.style.justifyContent = 'center';
+    toolsBar.style.marginTop = '10px';
+    toolsBar.style.flexWrap = 'wrap';
+
+    toolsBar.innerHTML = `
+        <span id="auth-user-label" class="badge" style="align-self:center; padding:6px 10px; border-radius:999px; background:#f3f1ee; color:#3b2f25;">
+            Usuario: —
+        </span>
+        <button class="btn btn-primary" id="system-prompt-btn" title="Editar system prompt">
+            ✨ System Prompt
+        </button>
+        <button class="btn" id="logout-btn" title="Cerrar sesión">
+            🚪 Salir
+        </button>
+    `;
+
+    header.appendChild(toolsBar);
+
+    document.getElementById('system-prompt-btn').addEventListener('click', openSystemPromptModal);
+    document.getElementById('logout-btn').addEventListener('click', logout);
+
+    ensureSystemPromptModal();
+    if (window.__authUser) {
+        updateAuthUser(window.__authUser);
+    }
+}
+
+function updateAuthUser(user) {
+    const label = document.getElementById('auth-user-label');
+    if (!label) return;
+    const email = user?.email || '—';
+    label.textContent = `Usuario: ${email}`;
+}
+
+async function logout() {
+    try {
+        await fetch(`${API_BASE}/auth/logout`, {
+            method: 'POST',
+            credentials: 'include'
+        });
+    } catch (e) {
+        // Ignore
+    }
+    window.location.href = '/panel/login.html';
+}
+
+function ensureSystemPromptModal() {
+    if (document.getElementById('system-prompt-modal')) return;
+
+    const modal = document.createElement('div');
+    modal.id = 'system-prompt-modal';
+    modal.style.display = 'none';
+    modal.style.position = 'fixed';
+    modal.style.top = '0';
+    modal.style.left = '0';
+    modal.style.right = '0';
+    modal.style.bottom = '0';
+    modal.style.background = 'rgba(0,0,0,0.5)';
+    modal.style.zIndex = '9999';
+    modal.innerHTML = `
+        <div style="background:#fff; max-width:700px; margin:8vh auto; padding:20px; border-radius:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h3 style="margin:0;">System Prompt del usuario</h3>
+                <button id="sp-close" class="btn">✕</button>
+            </div>
+            <p style="color:#666; margin:0 0 10px 0;">
+                Este prompt se añade antes de cada petición para personalizar el estilo y el enfoque.
+            </p>
+            <textarea id="sp-text" rows="10" style="width:100%; padding:10px; border-radius:8px; border:1px solid #ddd;"></textarea>
+            <div style="display:flex; gap:10px; margin-top:12px; justify-content:flex-end;">
+                <button id="sp-cancel" class="btn">Cancelar</button>
+                <button id="sp-save" class="btn btn-primary">Guardar</button>
+            </div>
+            <div id="sp-status" style="margin-top:8px; color:#c33; display:none;"></div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    document.getElementById('sp-close').addEventListener('click', closeSystemPromptModal);
+    document.getElementById('sp-cancel').addEventListener('click', closeSystemPromptModal);
+    document.getElementById('sp-save').addEventListener('click', saveSystemPrompt);
+}
+
+async function openSystemPromptModal() {
+    ensureSystemPromptModal();
+    const modal = document.getElementById('system-prompt-modal');
+    const status = document.getElementById('sp-status');
+    status.style.display = 'none';
+    modal.style.display = 'block';
+    try {
+        const res = await fetch(`${API_BASE}/auth/settings`, { credentials: 'include' });
+        if (!res.ok) throw new Error('No se pudo cargar');
+        const data = await res.json();
+        document.getElementById('sp-text').value = data.system_prompt || '';
+    } catch (e) {
+        status.textContent = 'Error cargando el prompt.';
+        status.style.display = 'block';
+    }
+}
+
+function closeSystemPromptModal() {
+    const modal = document.getElementById('system-prompt-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function saveSystemPrompt() {
+    const status = document.getElementById('sp-status');
+    status.style.display = 'none';
+    try {
+        const system_prompt = document.getElementById('sp-text').value;
+        const res = await fetch(`${API_BASE}/auth/settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ system_prompt })
+        });
+        if (!res.ok) throw new Error('No se pudo guardar');
+        closeSystemPromptModal();
+    } catch (e) {
+        status.textContent = 'Error guardando el prompt.';
+        status.style.display = 'block';
     }
 }
 

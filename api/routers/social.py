@@ -38,24 +38,27 @@ async def get_current_user(request: Request):
     Usado por: Panel web (verificar si está logueado)
     """
     user_id = request.session.get('user_id')
-    
     if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="No autenticado"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
+    user = db_service.get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
+    return {'success': True, 'user': user.to_dict()}
 
 @router.get("/pages")
-async def list_social_pages(platform: str | None = None):
+async def list_social_pages(platform: str | None = None, request: Request = None):
     """
     Lista páginas conectadas (Facebook/Instagram) desde la BD.
     Usado por: Panel (publish.html) para seleccionar la página/IG.
     """
     try:
+        user_id = request.session.get('user_id') if request else None
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
         if platform:
-            pages = db_service.list_social_pages(platform=platform)
+            pages = db_service.list_social_pages(platform=platform, user_id=user_id)
         else:
-            pages = db_service.list_social_pages()
+            pages = db_service.list_social_pages(user_id=user_id)
         return {"success": True, "pages": pages}
     except Exception as e:
         print(f"❌ Error en /api/social/pages: {e}")
@@ -90,14 +93,17 @@ async def logout(request: Request):
     return {'success': True, 'message': 'Sesión cerrada'}
 
 @router.get("/status")
-async def get_social_status():
+async def get_social_status(request: Request):
     """
     Obtiene el estado de todas las conexiones sociales
     
-    Usado por: Panel web (social_connect.html)
+    Usado por: Panel web (publish.html)
     """
     try:
-        social_status = social_service.get_status()
+        user_id = request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
+        social_status = social_service.get_status(user_id=user_id)
         return social_status
     except Exception as e:
         print(f"❌ Error obteniendo estado social: {e}")
@@ -107,19 +113,26 @@ async def get_social_status():
         )
 
 @router.get("/connect/{platform}")
-async def connect_social_platform(platform: str, request: Request):
+async def connect_social_platform(platform: str, request: Request, return_url: str | None = None):
     """
     Inicia OAuth para conectar una plataforma
     
     Redirige al usuario a la página de autorización de la plataforma
     
-    Usado por: Panel web (social_connect.html)
+    Usado por: Panel web (publish.html)
     """
     try:
+        user_id = request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
         # Construir redirect_uri
         base_url = str(request.base_url).rstrip('/')
         redirect_uri = f"{base_url}/api/social/callback/{platform}"
         
+        # Guardar return_url en sesión para volver al flujo correcto
+        if return_url:
+            request.session['oauth_return_url'] = return_url
+
         # Generar URL de autorización
         auth_data = social_service.generate_auth_url(platform, redirect_uri)
         
@@ -147,15 +160,20 @@ async def social_callback(platform: str, code: str, state: str = None, request: 
     Ahora NO llama a /me/accounts (esa lógica está centralizada en exchange_code_for_token)
     """
     try:
+        # Validar sesión
+        user_id = request.session.get('user_id')
+        if not user_id:
+            return RedirectResponse(url="/panel/login.html?error=not_authenticated")
+
         # Crear redirect_uri
         base_url = str(request.base_url).rstrip('/')
         redirect_uri = f"{base_url}/api/social/callback/{platform}"
 
         # Intercambiar code -> access_token
-        token_data = social_service.exchange_code_for_token(platform, code, redirect_uri)
+        token_data = social_service.exchange_code_for_token(platform, code, redirect_uri, user_id)
 
         if not token_data:
-            return RedirectResponse(url=f"/panel/?error=token_exchange_failed&platform={platform}")
+            return RedirectResponse(url=_resolve_oauth_return_url(request, f"/panel/?error=token_exchange_failed&platform={platform}"))
 
         # Convertir a long-lived token (solo IG/Facebook)
         if platform in ['instagram', 'facebook']:
@@ -168,97 +186,58 @@ async def social_callback(platform: str, code: str, state: str = None, request: 
         # Obtener info del usuario desde la plataforma
         user_info = social_service.get_user_info(platform, token_data['access_token'])
         if not user_info:
-            return RedirectResponse(url=f"/panel/?error=user_info_failed&platform={platform}")
+            return RedirectResponse(url=_resolve_oauth_return_url(request, f"/panel/?error=user_info_failed&platform={platform}"))
 
-        # DB
-        from database import SessionLocal
-        from db_models import User, SocialToken
-        from datetime import datetime
-        db = SessionLocal()
+        # Guardar token asociado al usuario actual
+        token_data['user_id'] = user_id
+        token_data['username'] = user_info.get('username') or user_info.get('name')
+        db_service.save_social_token(platform, token_data)
 
-        try:
-            # --- CREAR O ACTUALIZAR USER ---
-            if platform == 'instagram':
-                user = db.query(User).filter(User.instagram_id == user_info['id']).first()
-                if not user:
-                    user = User(
-                        instagram_id=user_info['id'],
-                        instagram_username=user_info.get('username')
-                    )
-                    db.add(user)
-                else:
-                    user.instagram_username = user_info.get('username')
-                user.last_login = datetime.utcnow()
+        # Actualizar metadata de usuario (opcional)
+        if platform == 'instagram':
+            db_service.update_user(user_id, {
+                'instagram_id': user_info.get('id'),
+                'instagram_username': user_info.get('username') or user_info.get('name')
+            })
+        elif platform == 'facebook':
+            db_service.update_user(user_id, {
+                'facebook_id': user_info.get('id'),
+                'facebook_name': user_info.get('username') or user_info.get('name')
+            })
 
-            elif platform == 'facebook':
-                user = db.query(User).filter(User.facebook_id == user_info['id']).first()
-                if not user:
-                    user = User(
-                        facebook_id=user_info['id'],
-                        facebook_name=user_info.get('name')
-                    )
-                    db.add(user)
-                else:
-                    user.facebook_name = user_info.get('name')
-                user.last_login = datetime.utcnow()
+        request.session['platform'] = platform
+        request.session['username'] = user_info.get('username') or user_info.get('name')
 
-            db.commit()
-            db.refresh(user)
-
-            # --- 🚫 YA NO SE OBTIENEN PÁGINAS AQUÍ ---
-            # page_id e instagram_account_id YA SE GUARDAN en exchange_code_for_token()
-            # Aquí solo actualizamos el token del usuario.
-
-            token = db.query(SocialToken).filter(
-                SocialToken.user_id == user.id,
-                SocialToken.platform == platform
-            ).first()
-
-            if token:
-                token.access_token = token_data['access_token']
-                token.refresh_token = token_data.get('refresh_token')
-                token.expires_at = token_data.get('expires_at')
-                token.username = user_info.get('username') or user_info.get('name')
-                token.last_used = datetime.utcnow()
-            else:
-                token = SocialToken(
-                    user_id=user.id,
-                    platform=platform,
-                    access_token=token_data['access_token'],
-                    refresh_token=token_data.get('refresh_token'),
-                    expires_at=token_data.get('expires_at'),
-                    username=user_info.get('username') or user_info.get('name'),
-                )
-                db.add(token)
-
-            db.commit()
-
-            # Crear sesión LOGIN
-            request.session['user_id'] = user.id
-            request.session['platform'] = platform
-            request.session['username'] = user_info.get('username') or user_info.get('name')
-
-            print(f"✅ Usuario {user.id} logueado con {platform}")
-            return RedirectResponse(url="/panel/")
-
-        finally:
-            db.close()
+        return RedirectResponse(url=_resolve_oauth_return_url(request, "/panel/"))
 
     except Exception as e:
         print(f"❌ Error en callback OAuth: {e}")
         import traceback
         traceback.print_exc()
-        return RedirectResponse(url=f"/panel/?error=callback_failed&platform={platform}")
+        return RedirectResponse(url=_resolve_oauth_return_url(request, f"/panel/?error=callback_failed&platform={platform}"))
+
+def _resolve_oauth_return_url(request: Request, fallback_url: str) -> str:
+    """Devuelve la URL de retorno guardada en sesión o un fallback."""
+    try:
+        return_url = request.session.pop('oauth_return_url', None)
+        if return_url:
+            return return_url
+    except Exception:
+        pass
+    return fallback_url
 
 @router.post("/refresh/{platform}")
-async def refresh_social_token(platform: str):
+async def refresh_social_token(platform: str, request: Request):
     """
     Renueva el token de una plataforma usando refresh token
     
     Usado por: Panel web (cuando el token expira)
     """
     try:
-        token_data = social_service.refresh_token(platform)
+        user_id = request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
+        token_data = social_service.refresh_token(platform, user_id=user_id)
         
         if not token_data:
             raise HTTPException(
@@ -282,14 +261,17 @@ async def refresh_social_token(platform: str):
         )
 
 @router.post("/disconnect/{platform}")
-async def disconnect_social_platform(platform: str):
+async def disconnect_social_platform(platform: str, request: Request):
     """
     Desconecta una plataforma (elimina tokens)
     
-    Usado por: Panel web (social_connect.html)
+    Usado por: Panel web (publish.html)
     """
     try:
-        success = social_service.disconnect(platform)
+        user_id = request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
+        success = social_service.disconnect(platform, user_id=user_id)
         
         if not success:
             raise HTTPException(
@@ -325,6 +307,9 @@ async def publish_to_social_networks(request: Request):
     Usado por: Panel web (publish.html)
     """
     try:
+        user_id = request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
         data = await request.json()
         codigo = data.get('codigo')
         networks = data.get('networks', [])
@@ -351,15 +336,15 @@ async def publish_to_social_networks(request: Request):
             try:
                 # Llamar al método específico de cada red
                 if network == 'instagram':
-                    result = publish_service.publish_to_instagram(codigo)
+                    result = publish_service.publish_to_instagram(codigo, user_id=user_id)
                 elif network == 'linkedin':
-                    result = publish_service.publish_to_linkedin(codigo)
+                    result = publish_service.publish_to_linkedin(codigo, user_id=user_id)
                 elif network == 'twitter':
-                    result = publish_service.publish_to_twitter(codigo)
+                    result = publish_service.publish_to_twitter(codigo, user_id=user_id)
                 elif network == 'facebook':
-                    result = publish_service.publish_to_facebook(codigo)
+                    result = publish_service.publish_to_facebook(codigo, user_id=user_id)
                 elif network == 'tiktok':
-                    result = publish_service.publish_to_tiktok(codigo)
+                    result = publish_service.publish_to_tiktok(codigo, user_id=user_id)
                 else:
                     result = {'success': False, 'error': f'Red social no soportada: {network}'}
                 

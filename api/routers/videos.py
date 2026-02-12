@@ -2,13 +2,14 @@
 Router de Videos para FastAPI
 Endpoints para generación y formateo de videos
 """
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Request
 from pydantic import BaseModel
 import sys
 import os
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from services.video_service import video_service
+import db_service
 
 router = APIRouter(
     prefix="/api",
@@ -31,13 +32,16 @@ class FormatVideosRequest(BaseModel):
     codigo: str
 
 @router.post("/generate-video-text")
-async def generate_video_text(request: GenerateVideoTextRequest):
+async def generate_video_text(request: GenerateVideoTextRequest, http_request: Request):
     """
     Genera video desde texto usando Fal.ai SeeDance 1.0 Pro
     
     Usado por: Falai playground, tests
     """
     try:
+        user_id = http_request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
         result = await video_service.generate_video_from_text(request.prompt, request.resolution)
         
         # Guardar en test_results para pruebas
@@ -68,13 +72,16 @@ async def generate_video_text(request: GenerateVideoTextRequest):
         )
 
 @router.post("/generate-video-image")
-async def generate_video_image(request: GenerateVideoImageRequest):
+async def generate_video_image(request: GenerateVideoImageRequest, http_request: Request):
     """
     Genera video desde imagen usando Fal.ai SeeDance 1.0 Pro
     
     Usado por: Falai playground, tests
     """
     try:
+        user_id = http_request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
         result = await video_service.generate_video_from_image(
             request.prompt, 
             request.image_url, 
@@ -109,14 +116,20 @@ async def generate_video_image(request: GenerateVideoImageRequest):
         )
 
 @router.post("/generate-video-base")
-async def generate_video_base(request: GenerateVideoBaseRequest):
+async def generate_video_base(request: GenerateVideoBaseRequest, http_request: Request):
     """
     Genera video base para un post usando script de video
     
     Usado por: Panel web (validar Fase 6)
     """
     try:
-        result = await video_service.generate_video_base(request.codigo)
+        user_id = http_request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
+        post = db_service.get_post_by_codigo(request.codigo, user_id=user_id)
+        if not post:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post no encontrado")
+        result = await video_service.generate_video_base(request.codigo, user_id=user_id)
         return result
     except Exception as e:
         raise HTTPException(
@@ -125,14 +138,20 @@ async def generate_video_base(request: GenerateVideoBaseRequest):
         )
 
 @router.post("/format-videos")
-async def format_videos(request: FormatVideosRequest):
+async def format_videos(request: FormatVideosRequest, http_request: Request):
     """
     Formatea video base para diferentes redes sociales
     
     Usado por: Panel web (validar Fase 7)
     """
     try:
-        result = await video_service.format_videos(request.codigo)
+        user_id = http_request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
+        post = db_service.get_post_by_codigo(request.codigo, user_id=user_id)
+        if not post:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post no encontrado")
+        result = await video_service.format_videos(request.codigo, user_id=user_id)
         return result
     except Exception as e:
         raise HTTPException(

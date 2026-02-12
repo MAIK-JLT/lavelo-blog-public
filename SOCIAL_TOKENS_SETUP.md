@@ -202,7 +202,7 @@ python server.py
 
 ### 3. Abrir Panel de Conexiones
 
-Navega a: http://localhost:5001/panel/social_connect.html
+Navega a: http://localhost:5001/panel/publish.html?codigo=YYYYMMDD-N
 
 Deberías ver las 5 redes sociales con estado "❌ No conectado"
 
@@ -261,4 +261,4 @@ Una vez configurado todo:
 
 **Puedes empezar a conectar tus redes sociales!** 🚀
 
-Abre: http://localhost:5001/panel/social_connect.html
+Abre: http://localhost:5001/panel/publish.html?codigo=YYYYMMDD-N

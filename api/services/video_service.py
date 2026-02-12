@@ -124,13 +124,18 @@ class VideoService:
             'size_mb': len(video_bytes) / (1024 * 1024)
         }
     
-    async def generate_video_base(self, codigo: str) -> Dict:
+    async def generate_video_base(self, codigo: str, user_id: int = None) -> Dict:
         """
         Genera video base para un post usando script de video
         
         Usado por:
         - Panel Web: Validar Fase 6 (VIDEO_PROMPT_AWAITING)
         """
+        if user_id:
+            post = db_service.get_post_by_codigo(codigo, user_id=user_id)
+            if not post:
+                raise Exception("Post no encontrado")
+
         # Leer script de video
         script_filename = f"{codigo}_script_video.txt"
         script = self.file_service.read_file(codigo, 'textos', script_filename)
@@ -153,7 +158,7 @@ class VideoService:
         self.file_service.save_binary_file(codigo, 'videos', filename, result['video_bytes'])
         
         # Actualizar checkbox en BD
-        db_service.update_post(codigo, {'video_base_mp4': True})
+        db_service.update_post(codigo, {'video_base_mp4': True}, user_id=user_id)
         
         print(f"💾 Video base guardado: {filename}")
         
@@ -166,7 +171,7 @@ class VideoService:
             'message': f'✅ Video base generado'
         }
     
-    async def format_videos(self, codigo: str) -> Dict:
+    async def format_videos(self, codigo: str, user_id: int = None) -> Dict:
         """
         Formatea video base para diferentes redes sociales usando FFmpeg
         
@@ -175,6 +180,11 @@ class VideoService:
         """
         import subprocess
         
+        if user_id:
+            post = db_service.get_post_by_codigo(codigo, user_id=user_id)
+            if not post:
+                raise Exception("Post no encontrado")
+
         # Leer video base
         base_filename = f"{codigo}_video_base.mp4"
         base_path = self.file_service._get_file_path(codigo, 'videos', base_filename)
@@ -212,7 +222,7 @@ class VideoService:
                 
                 # Actualizar checkbox en BD
                 checkbox_field = f'{name}_mp4'
-                db_service.update_post(codigo, {checkbox_field: True})
+                db_service.update_post(codigo, {checkbox_field: True}, user_id=user_id)
                 
                 formatted.append(output_filename)
                 print(f"  ✅ {output_filename} generado ({specs['width']}x{specs['height']})")

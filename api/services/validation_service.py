@@ -20,7 +20,7 @@ class ValidationService:
         self.image_service = image_service
         self.video_service = video_service
     
-    async def validate_phase(self, codigo: str, current_state: str, redes: Dict[str, bool] = None) -> Dict:
+    async def validate_phase(self, codigo: str, current_state: str, redes: Dict[str, bool] = None, user_id: int = None) -> Dict:
         """
         Valida una fase y ejecuta la acción correspondiente
         
@@ -31,11 +31,16 @@ class ValidationService:
         if redes is None:
             redes = {}
         
+        if user_id:
+            post = db_service.get_post_by_codigo(codigo, user_id=user_id)
+            if not post:
+                raise Exception("Post no encontrado")
+
         # Guardar configuración de redes en BD
         print(f"📱 Redes seleccionadas: {redes}")
         for network, active in redes.items():
             field_name = f'redes_{network}'
-            db_service.update_post(codigo, {field_name: active})
+            db_service.update_post(codigo, {field_name: active}, user_id=user_id)
         
         # Máquina de estados: definir transiciones
         state_transitions = {
@@ -108,26 +113,26 @@ class ValidationService:
         action_result = {}
         
         if transition['action'] == 'generate_adapted_texts':
-            action_result = await self.content_service.generate_adapted_texts(codigo, redes)
+            action_result = await self.content_service.generate_adapted_texts(codigo, redes, user_id=user_id)
         
         elif transition['action'] == 'generate_image_prompt':
-            action_result = await self.content_service.generate_image_prompt(codigo)
+            action_result = await self.content_service.generate_image_prompt(codigo, user_id=user_id)
         
         elif transition['action'] == 'generate_image':
             # Fase 3: Generar 2 variaciones base
-            action_result = await self.image_service.generate_image(codigo, num_images=2)
+            action_result = await self.image_service.generate_image(codigo, num_images=2, user_id=user_id)
         
         elif transition['action'] == 'format_images':
-            action_result = await self.image_service.format_images(codigo)
+            action_result = await self.image_service.format_images(codigo, user_id=user_id)
         
         elif transition['action'] == 'generate_video_script':
-            action_result = await self.content_service.generate_video_script(codigo)
+            action_result = await self.content_service.generate_video_script(codigo, user_id=user_id)
         
         elif transition['action'] == 'generate_video_base':
-            action_result = await self.video_service.generate_video_base(codigo)
+            action_result = await self.video_service.generate_video_base(codigo, user_id=user_id)
         
         elif transition['action'] == 'format_videos':
-            action_result = await self.video_service.format_videos(codigo)
+            action_result = await self.video_service.format_videos(codigo, user_id=user_id)
         
         elif transition['action'] == 'mark_ready':
             # Solo actualizar estado
@@ -138,7 +143,7 @@ class ValidationService:
             action_result = {'success': True, 'message': 'Publicación pendiente de implementar'}
         
         # Actualizar estado en BD
-        db_service.update_post(codigo, {'estado': transition['next']})
+        db_service.update_post(codigo, {'estado': transition['next']}, user_id=user_id)
         
         return {
             'success': True,
@@ -149,7 +154,7 @@ class ValidationService:
             'message': f"✅ Fase validada: {current_state} → {transition['next']}"
         }
     
-    async def reset_dependent_phases(self, codigo: str, edited_phase: int) -> Dict:
+    async def reset_dependent_phases(self, codigo: str, edited_phase: int, user_id: int = None) -> Dict:
         """
         Resetea fases dependientes cuando se edita una fase validada
         
@@ -168,6 +173,11 @@ class ValidationService:
             8: []                       # VIDEO_FORMATS no resetea nada
         }
         
+        if user_id:
+            post = db_service.get_post_by_codigo(codigo, user_id=user_id)
+            if not post:
+                raise Exception("Post no encontrado")
+
         phases_to_reset = phase_dependencies.get(edited_phase, [])
         
         # TODO: Implementar reseteo de checkboxes según fase

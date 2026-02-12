@@ -7,11 +7,12 @@
     <link rel="stylesheet" href="css/style.css">
     <style>
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Sora', sans-serif;
+            background: radial-gradient(circle at top left, #c7bfb6 0%, #b4aca2 35%, #a99f96 100%);
             min-height: 100vh;
-            padding: 20px;
+            padding: 24px;
             margin: 0;
+            color: #2b2521;
         }
 
         .publish-container {
@@ -20,43 +21,47 @@
         }
 
         .header {
-            background: white;
+            background: #f6eee6;
             padding: 30px;
-            border-radius: 15px;
+            border-radius: 24px;
             margin-bottom: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            box-shadow: 0 14px 38px rgba(33, 26, 22, 0.18);
+            border: 1px solid rgba(43, 37, 33, 0.08);
         }
 
         .header h1 {
-            color: #667eea;
+            color: #2b2521;
             margin: 0 0 10px 0;
             font-size: 2em;
+            font-family: 'Fraunces', serif;
         }
 
         .header p {
-            color: #666;
+            color: #8c837b;
             margin: 0;
         }
 
         .content-section {
-            background: white;
+            background: #f6eee6;
             padding: 30px;
-            border-radius: 15px;
+            border-radius: 24px;
             margin-bottom: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            box-shadow: 0 14px 38px rgba(33, 26, 22, 0.18);
+            border: 1px solid rgba(43, 37, 33, 0.08);
         }
 
         .section-title {
             font-size: 1.5em;
-            color: #667eea;
+            color: #2b2521;
             margin-bottom: 20px;
             padding-bottom: 10px;
-            border-bottom: 2px solid #667eea;
+            border-bottom: 2px solid #c0773c;
+            font-family: 'Fraunces', serif;
         }
 
         .network-card {
-            background: #f8f9fa;
-            border-radius: 10px;
+            background: #efe5da;
+            border-radius: 16px;
             padding: 20px;
             margin-bottom: 15px;
             display: flex;
@@ -88,12 +93,12 @@
 
         .network-details h3 {
             margin: 0 0 5px 0;
-            color: #333;
+            color: #2b2521;
         }
 
         .network-details p {
             margin: 0;
-            color: #666;
+            color: #8c837b;
             font-size: 0.9em;
         }
 
@@ -111,18 +116,18 @@
         }
 
         .status-connected {
-            background: #d4edda;
-            color: #155724;
+            background: rgba(63, 122, 91, 0.18);
+            color: #2f6a4e;
         }
 
         .status-disconnected {
-            background: #f8d7da;
-            color: #721c24;
+            background: rgba(192, 79, 60, 0.16);
+            color: #9c2f25;
         }
 
         .status-no-content {
-            background: #fff3cd;
-            color: #856404;
+            background: rgba(227, 168, 87, 0.2);
+            color: #6b4a2a;
         }
 
         .network-checkbox {
@@ -144,7 +149,7 @@
         .btn {
             padding: 10px 20px;
             border: none;
-            border-radius: 8px;
+            border-radius: 12px;
             font-size: 0.9rem;
             font-weight: 500;
             cursor: pointer;
@@ -155,41 +160,41 @@
         }
 
         .btn-connect {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: linear-gradient(135deg, #b86f3d 0%, #e3a857 100%);
+            color: #fffaf3;
         }
 
         .btn-connect:hover {
             transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 6px 18px rgba(33, 26, 22, 0.2);
         }
 
         .btn-publish {
-            background: #28a745;
-            color: white;
+            background: #3f7a5b;
+            color: #fffaf3;
             font-size: 1.1em;
             padding: 15px 30px;
         }
 
         .btn-publish:hover {
-            background: #218838;
+            background: #366a50;
             transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+            box-shadow: 0 6px 18px rgba(33, 26, 22, 0.2);
         }
 
         .btn-publish:disabled {
-            background: #6c757d;
+            background: #8c837b;
             cursor: not-allowed;
             opacity: 0.6;
         }
 
         .btn-back {
-            background: #6c757d;
-            color: white;
+            background: #4f4741;
+            color: #fffaf3;
         }
 
         .btn-back:hover {
-            background: #5a6268;
+            background: #5a524b;
         }
 
         .actions {
@@ -202,12 +207,12 @@
         .loading {
             text-align: center;
             padding: 40px;
-            color: #666;
+            color: #8c837b;
         }
 
         .spinner {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #667eea;
+            border: 3px solid rgba(43, 37, 33, 0.15);
+            border-top: 3px solid #c0773c;
             border-radius: 50%;
             width: 40px;
             height: 40px;
@@ -228,21 +233,21 @@
         }
 
         .message.error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
+            background: rgba(192, 79, 60, 0.16);
+            color: #9c2f25;
+            border: 1px solid rgba(192, 79, 60, 0.4);
         }
 
         .message.success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
+            background: rgba(63, 122, 91, 0.18);
+            color: #2f6a4e;
+            border: 1px solid rgba(63, 122, 91, 0.4);
         }
 
         .message.info {
-            background: #d1ecf1;
-            color: #0c5460;
-            border: 1px solid #bee5eb;
+            background: rgba(227, 168, 87, 0.2);
+            color: #6b4a2a;
+            border: 1px solid rgba(227, 168, 87, 0.4);
         }
 
         .preview-grid {
@@ -253,19 +258,19 @@
         }
 
         .preview-card {
-            background: #f8f9fa;
-            border-radius: 10px;
+            background: #efe5da;
+            border-radius: 16px;
             padding: 15px;
-            border: 2px solid #dee2e6;
+            border: 1px solid rgba(43, 37, 33, 0.12);
         }
 
         .preview-card h4 {
             margin: 0 0 10px 0;
-            color: #333;
+            color: #2b2521;
         }
 
         .preview-card p {
-            color: #666;
+            color: #8c837b;
             font-size: 0.9em;
             line-height: 1.6;
             margin: 0;
@@ -558,9 +563,14 @@
         }
 
         // Conectar red social
+        function getReturnUrl() {
+            return window.location.pathname + window.location.search;
+        }
+
         function connectNetwork(platform) {
             showMessage('info', `Redirigiendo a ${platform}...`);
-            window.location.href = `${API_BASE}/api/social/connect/${platform}`;
+            const returnUrl = encodeURIComponent(getReturnUrl());
+            window.location.href = `${API_BASE}/api/social/connect/${platform}?return_url=${returnUrl}`;
         }
 
         // Actualizar selección

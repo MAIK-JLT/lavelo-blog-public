@@ -1,0 +1,12 @@
+Portrait-oriented modern infographic poster illustrating an "8-week Olympic Triathlon" training block — clean flat vector style, high-detail, bold sans-serif labels. Overall orientation: portrait (vertical) with a clear horizontal internal composition of stacked bands. Lighting: low-angle sunset-style directional light rendered in monochrome as warm-feeling tonal contrast and long soft shadows to add depth and dimensionality without introducing color. Color/tone: high-contrast black-and-white palette — deep charcoal/near-black background, pure white text and highlights, mid-gray accents and subtle halftone/pattern fills to replace color accents. Texture: subtle stone texture overlay (piedra) across background panels and band dividers for tactile, premium print feel; keep texture light so icons and text remain crisp.
+
+Layout & content (maintain original essence):
+- Top header with bold title and subtitle.
+- Three prominent horizontal bands for Swim, Bike, Run (left-to-right icon + silhouette within each band); a fourth band underneath for Strength & Recovery showing weights, core icons, sleep and protein icons.
+- Center horizontal timeline spanning Weeks 1–8 with clear week markers and color-coded progression conveyed via tonal variations and patterned arrows: Weeks 1–3 build, Week 4 recovery (-25%), Weeks 5–7 peak, Week 8 taper. Use arrow shapes and fill patterns (stripe/dot/solid) to indicate phases in monochrome.
+- Sample session cards placed near each discipline: e.g., "2.5 km swim set", "2h bike 3×15' @90% FTP", "50' run 5×4' threshold". Each card includes small metric badges (FTP, 10K pace, RPE, HR) rendered as compact round/rectangular badges in white-on-dark or dark-on-light contrast.
+- Simple charts and icons: smooth workload curve chart, heart-rate variability (HRV) icon, brick-session illustration combining bike + run silhouettes, and small metric legends.
+- Visual style: crisp vector silhouettes and icons, high-detail linework, bold sans-serif labels, strong typographic hierarchy, balanced margins and ample white/negative space to ensure readability for both print and social media assets (story and feed crops).
+- Subtle grain + stone texture, clear visual hierarchy for print and social output; ensure all information remains legible when scaled.
+
+Use any provided reference images (icons, athlete silhouettes, typography examples, stone texture samples) as a visual guide; if color references are provided, translate them into monochrome tonal equivalents and matching patterns to preserve original intent.

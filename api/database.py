@@ -43,6 +43,42 @@ engine = create_engine(
     } if DATABASE_URL.startswith("sqlite") else {}
 )
 
+def _ensure_sqlite_auth_schema():
+    """Asegura columnas nuevas en SQLite sin necesidad de migraciones manuales."""
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+    try:
+        conn = engine.raw_connection()
+        cur = conn.cursor()
+
+        # Users table
+        cur.execute("PRAGMA table_info(users)")
+        user_cols = {row[1] for row in cur.fetchall()}
+        if "email" not in user_cols:
+            cur.execute("ALTER TABLE users ADD COLUMN email VARCHAR(255)")
+        if "password_hash" not in user_cols:
+            cur.execute("ALTER TABLE users ADD COLUMN password_hash VARCHAR(255)")
+        if "name" not in user_cols:
+            cur.execute("ALTER TABLE users ADD COLUMN name VARCHAR(255)")
+        if "system_prompt" not in user_cols:
+            cur.execute("ALTER TABLE users ADD COLUMN system_prompt TEXT")
+
+        # Unique index for email
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email)")
+
+        # Posts table
+        cur.execute("PRAGMA table_info(posts)")
+        post_cols = {row[1] for row in cur.fetchall()}
+        if "user_id" not in post_cols:
+            cur.execute("ALTER TABLE posts ADD COLUMN user_id INTEGER")
+
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception:
+        # No bloquear arranque por migración ligera
+        pass
+
 # Activar WAL, busy_timeout y synchronous en SQLite local
 @event.listens_for(Engine, "connect")
 def _set_sqlite_pragma(dbapi_conn, connection_record):
@@ -57,6 +93,9 @@ def _set_sqlite_pragma(dbapi_conn, connection_record):
     except Exception:
         # No romper en otros motores
         pass
+
+# Asegurar schema mínimo para auth en SQLite
+_ensure_sqlite_auth_schema()
 
 # Crear session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

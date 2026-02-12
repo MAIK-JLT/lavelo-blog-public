@@ -22,14 +22,17 @@ router = APIRouter(
 post_service = PostService()
 
 @router.get("/", response_model=dict)
-async def list_posts(limit: Optional[int] = None):
+async def list_posts(limit: Optional[int] = None, request: Request = None):
     """
     Lista todos los posts
     
     Usado por: Panel web (selector de posts)
     """
     try:
-        posts = await post_service.list_posts(limit=limit)
+        user_id = request.session.get('user_id') if request else None
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
+        posts = await post_service.list_posts(limit=limit, user_id=user_id)
         return {
             'success': True,
             'posts': posts
@@ -41,14 +44,17 @@ async def list_posts(limit: Optional[int] = None):
         )
 
 @router.get("/{codigo}", response_model=dict)
-async def get_post(codigo: str):
+async def get_post(codigo: str, request: Request):
     """
     Obtiene un post por código
     
     Usado por: Panel web (cargar detalles)
     """
     try:
-        post = await post_service.get_post(codigo)
+        user_id = request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
+        post = await post_service.get_post(codigo, user_id=user_id)
         
         if not post:
             raise HTTPException(
@@ -77,11 +83,12 @@ async def create_post(post: PostCreate, request: Request):
     Verifica límites según tier del usuario
     """
     try:
-        # Obtener user_id de sesión (si está logueado)
+        # Obtener user_id de sesión
         user_id = request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
         
-        # Obtener IP del cliente (si es anónimo)
-        client_ip = request.client.host if not user_id else None
+        client_ip = None
         
         # Verificar límite de creación
         limit_check = limits_service.check_create_limit(user_id=user_id, client_ip=client_ip)
@@ -98,7 +105,8 @@ async def create_post(post: PostCreate, request: Request):
             categoria=post.categoria,
             idea=post.idea,
             fecha_programada=str(post.fecha_programada) if post.fecha_programada else None,
-            hora_programada=post.hora_programada
+            hora_programada=post.hora_programada,
+            user_id=user_id
         )
         
         # Agregar mensaje de límite a la respuesta
@@ -114,7 +122,7 @@ async def create_post(post: PostCreate, request: Request):
         )
 
 @router.patch("/{codigo}", response_model=dict)
-async def update_post(codigo: str, updates: PostUpdate):
+async def update_post(codigo: str, updates: PostUpdate, request: Request):
     """
     Actualiza un post
     
@@ -124,7 +132,10 @@ async def update_post(codigo: str, updates: PostUpdate):
         # Convertir a dict y eliminar None
         updates_dict = updates.model_dump(exclude_unset=True)
         
-        result = await post_service.update_post(codigo, updates_dict)
+        user_id = request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
+        result = await post_service.update_post(codigo, updates_dict, user_id=user_id)
         return result
     except Exception as e:
         raise HTTPException(
@@ -133,14 +144,17 @@ async def update_post(codigo: str, updates: PostUpdate):
         )
 
 @router.delete("/{codigo}", response_model=dict)
-async def delete_post(codigo: str):
+async def delete_post(codigo: str, request: Request):
     """
     Elimina un post
     
     Usado por: Panel web (botón eliminar)
     """
     try:
-        result = await post_service.delete_post(codigo)
+        user_id = request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
+        result = await post_service.delete_post(codigo, user_id=user_id)
         return result
     except Exception as e:
         raise HTTPException(
@@ -149,13 +163,19 @@ async def delete_post(codigo: str):
         )
 
 @router.post("/{codigo}/init-folders", response_model=dict)
-async def init_post_folders(codigo: str):
+async def init_post_folders(codigo: str, request: Request):
     """
     Inicializa carpetas de Drive para un post
     
     Usado por: Panel web, MCP
     """
     try:
+        user_id = request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
+        post = await post_service.get_post(codigo, user_id=user_id)
+        if not post:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post no encontrado")
         result = await post_service.init_post_folders(codigo)
         return result
     except Exception as e:
@@ -165,7 +185,7 @@ async def init_post_folders(codigo: str):
         )
 
 @router.post("/{codigo}/update-networks", response_model=dict)
-async def update_networks(codigo: str, networks: dict):
+async def update_networks(codigo: str, networks: dict, request: Request):
     """
     Actualiza la selección de redes sociales para un post
     
@@ -177,13 +197,16 @@ async def update_networks(codigo: str, networks: dict):
         sys.path.append(os.path.dirname(os.path.dirname(__file__)))
         import db_service
         
+        user_id = request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
         # Actualizar cada red en la BD
         updates = {}
         for network, active in networks.items():
             field_name = f'redes_{network}'
             updates[field_name] = active
         
-        success = db_service.update_post(codigo, updates)
+        success = db_service.update_post(codigo, updates, user_id=user_id)
         
         if not success:
             raise Exception(f"Error actualizando redes para {codigo}")
@@ -199,7 +222,7 @@ async def update_networks(codigo: str, networks: dict):
         )
 
 @router.post("/{codigo}/reset-phases", response_model=dict)
-async def reset_phases(codigo: str, data: dict):
+async def reset_phases(codigo: str, data: dict, request: Request):
     """
     Resetea fases dependientes cuando se edita contenido validado
     
@@ -211,6 +234,9 @@ async def reset_phases(codigo: str, data: dict):
         sys.path.append(os.path.dirname(os.path.dirname(__file__)))
         import db_service
         
+        user_id = request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
         estado = data.get('estado')
         
         # Mapeo de estados a checkboxes que deben resetearse
@@ -263,7 +289,7 @@ async def reset_phases(codigo: str, data: dict):
         for checkbox in checkboxes_to_reset:
             updates[checkbox] = False
         
-        success = db_service.update_post(codigo, updates)
+        success = db_service.update_post(codigo, updates, user_id=user_id)
         
         if not success:
             raise Exception(f"Error reseteando fases para {codigo}")
@@ -295,6 +321,14 @@ async def upload_image(codigo: str, request: Request):
         from services.file_service import FileService
         import db_service
         
+        user_id = request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
+        # Verificar ownership
+        post = db_service.get_post_by_codigo(codigo, user_id=user_id)
+        if not post:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post no encontrado")
+
         file_service = FileService()
         
         # Leer body como texto (no como dict para evitar validación)
@@ -343,7 +377,7 @@ async def upload_image(codigo: str, request: Request):
             'shorts_9x16_mp4': False,
             'tiktok_9x16_mp4': False,
             'estado': 'IMAGE_BASE_AWAITING'
-        })
+        }, user_id=user_id)
         
         return {
             'success': True,

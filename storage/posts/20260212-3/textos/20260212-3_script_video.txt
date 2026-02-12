@@ -1,0 +1,4 @@
+Escena 1: Nadador potente en piscina, cámara aérea y primeros planos, texto: "8 semanas — técnica y series".  
+Escena 2: Ciclista en rodillo/car. con medidor FTP en pantalla, sprints explosivos, texto: "fuerza y umbral".  
+Escena 3: Brick: bici a carrera, reloj marcando ritmo, zancada potente, texto: "velocidad + resistencia".  
+Escena 4: Atleta revisa calendario y recupera (masaje/sueño), texto: "progresión y adapta tu plan".

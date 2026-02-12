@@ -2,7 +2,7 @@
 Router de Content para FastAPI
 Endpoints para generación de contenido con Claude
 """
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Request
 from typing import List, Dict, Optional
 from pydantic import BaseModel
 import sys
@@ -28,14 +28,17 @@ class GeneratePromptRequest(BaseModel):
     codigo: str
 
 @router.post("/chat")
-async def chat(request: ChatRequest):
+async def chat(request: ChatRequest, http_request: Request):
     """
     Chat con Claude usando herramientas MCP
     
     Usado por: Panel web (chat flotante)
     """
     try:
-        result = await content_service.chat(request.message, request.history)
+        user_id = http_request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
+        result = await content_service.chat(request.message, request.history, user_id=user_id)
         return result
     except Exception as e:
         raise HTTPException(
@@ -44,14 +47,17 @@ async def chat(request: ChatRequest):
         )
 
 @router.post("/generate-adapted-texts")
-async def generate_adapted_texts(request: GenerateAdaptedTextsRequest):
+async def generate_adapted_texts(request: GenerateAdaptedTextsRequest, http_request: Request):
     """
     Genera textos adaptados para redes sociales
     
     Usado por: Panel web (validar Fase 1)
     """
     try:
-        result = await content_service.generate_adapted_texts(request.codigo, request.redes)
+        user_id = http_request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
+        result = await content_service.generate_adapted_texts(request.codigo, request.redes, user_id=user_id)
         return result
     except Exception as e:
         raise HTTPException(
@@ -60,14 +66,17 @@ async def generate_adapted_texts(request: GenerateAdaptedTextsRequest):
         )
 
 @router.post("/generate-image-prompt")
-async def generate_image_prompt(request: GeneratePromptRequest):
+async def generate_image_prompt(request: GeneratePromptRequest, http_request: Request):
     """
     Genera prompt para imagen usando Claude
     
     Usado por: Panel web (validar Fase 2)
     """
     try:
-        result = await content_service.generate_image_prompt(request.codigo)
+        user_id = http_request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
+        result = await content_service.generate_image_prompt(request.codigo, user_id=user_id)
         return result
     except Exception as e:
         raise HTTPException(
@@ -76,14 +85,17 @@ async def generate_image_prompt(request: GeneratePromptRequest):
         )
 
 @router.post("/generate-video-script")
-async def generate_video_script(request: GeneratePromptRequest):
+async def generate_video_script(request: GeneratePromptRequest, http_request: Request):
     """
     Genera script para video usando Claude
     
     Usado por: Panel web (validar Fase 5)
     """
     try:
-        result = await content_service.generate_video_script(request.codigo)
+        user_id = http_request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
+        result = await content_service.generate_video_script(request.codigo, user_id=user_id)
         return result
     except Exception as e:
         raise HTTPException(

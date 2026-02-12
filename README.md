@@ -91,7 +91,7 @@ Sistema automatizado end-to-end para crear y publicar contenido semanal de triat
 ├── falai/                # Generador de imágenes/videos
 │   ├── index.html
 │   ├── advanced_settings.html
-│   └── social_connect.html
+│   └── publish.html
 ├── api/                  # Backend FastAPI
 │   ├── main.py           # Punto de entrada FastAPI
 │   ├── server.py         # API Flask (legacy, en desuso)
@@ -828,7 +828,7 @@ Herramienta independiente para generar imágenes y videos con IA usando Fal.ai. 
 - **Archivos:**
   - `falai/index.html` - Interfaz principal
   - `falai/advanced_settings.html` - Configuración de ajustes visuales
-  - `falai/social_connect.html` - Gestión de conexiones a redes sociales
+  - `panel/publish.html` - Publicación en redes y conexión OAuth integrada
 
 ### **Funcionalidades**
 
@@ -1290,4 +1290,3 @@ Require valid-user
 7. **Simplicidad:** Botones en lugar de cron jobs o timers complejos
 8. **Accesibilidad:** Panel web disponible desde cualquier dispositivo
 9. **Sin dependencias externas:** Todo en el propio servidor
-

@@ -4101,7 +4101,7 @@ def social_callback(platform):
         token_data = exchange_code_for_token(platform, code, current_user_id)
 
         if not token_data:
-            return redirect(f"/panel/social_connect.html?error=token_exchange_failed&platform={platform}")
+            return redirect(f"/panel/?error=token_exchange_failed&platform={platform}")
         
         # Guardar token en SQLite (DB) con campos extra si existen
         # Importante: usar el user_id LOCAL (no el de Meta)
@@ -4147,13 +4147,13 @@ def social_callback(platform):
         except Exception as ver_e:
             print(f"⚠️ No se pudo verificar post-guardado: {ver_e}")
         
-        return redirect(f"/panel/social_connect.html?success=true&platform={platform}")
+        return redirect(f"/panel/?success=true&platform={platform}")
         
     except Exception as e:
         print(f"❌ Error en callback de {platform}: {str(e)}")
         import traceback
         traceback.print_exc()
-        return redirect(f"/panel/social_connect.html?error={str(e)}&platform={platform}")
+        return redirect(f"/panel/?error={str(e)}&platform={platform}")
 
 def exchange_code_for_token(platform, code, current_user_id):
     """Intercambia el code por un long-lived user token + todas las páginas"""

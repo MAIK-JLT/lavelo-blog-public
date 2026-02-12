@@ -51,8 +51,62 @@ class ContentService:
         except Exception as e:
             logger.warning("⚠️ No se pudo inspeccionar respuesta OpenAI vacía: %s", e)
         return response.choices[0].message.content or ""
+
+    async def _generate_post_payload(self, idea: str, system_prompt: str) -> Optional[Dict]:
+        """Genera un payload JSON para create_post si el modelo no invoca tools."""
+        prompt = (
+            "Genera un post para un blog de triatlón. "
+            "Devuelve SOLO un JSON con estas claves: titulo, categoria, tags (array), contenido. "
+            "Reglas: max 800 palabras, Markdown con ## y ###, tono profesional y práctico. "
+            "categoria debe ser una de: training, racing, training-science. "
+            "Si no queda claro, elige training.\n\n"
+            f"Idea del usuario: {idea}"
+        )
+        content = await self._openai_chat(
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=1600,
+            debug_label="fallback_post_json"
+        )
+        if not content:
+            return None
+        try:
+            return json.loads(content)
+        except Exception:
+            # Intentar extraer JSON de un bloque
+            try:
+                start = content.find("{")
+                end = content.rfind("}")
+                if start >= 0 and end > start:
+                    return json.loads(content[start:end + 1])
+            except Exception:
+                return None
+        return None
+
+    def _should_force_create_post(self, message: str, history: List[Dict]) -> bool:
+        """Detecta si el usuario quiere crear un post y conviene forzar tool."""
+        lower_msg = (message or "").lower().strip()
+        if lower_msg in ("ayúdame a crear un nuevo post", "ayudame a crear un nuevo post", "crear un nuevo post"):
+            return False
+        create_keywords = [
+            "crear", "nuevo post", "post", "artículo", "articulo", "escribir", "redacta", "redactar",
+            "hazme", "haz un post", "genera"
+        ]
+        wants_post = any(k in lower_msg for k in create_keywords)
+        prev_assistant = ""
+        if history and history[-1].get("role") == "assistant":
+            prev_assistant = (history[-1].get("content") or "").lower()
+        asked_details = any(k in prev_assistant for k in ["categor", "público", "publico", "tags", "distancia", "confirma"])
+        provided_details = len((message or "").strip()) > 20 and "?" not in (message or "")
+        has_category = any(k in lower_msg for k in ["training", "racing", "training-science", "categoria"])
+        has_audience = any(k in lower_msg for k in ["principiante", "recreativo", "age-group", "élite", "elite"])
+        has_distance = any(k in lower_msg for k in ["sprint", "olímpico", "olimpico", "half", "full", "ruta", "fondo"])
+        enough_details = provided_details and (has_category or has_audience or has_distance)
+        return (asked_details and enough_details) or (wants_post and enough_details)
     
-    async def chat(self, message: str, history: List[Dict] = None) -> Dict:
+    async def chat(self, message: str, history: List[Dict] = None, user_id: Optional[int] = None) -> Dict:
         """
         Chat con Claude usando herramientas MCP
         
@@ -89,8 +143,8 @@ class ContentService:
         # Construir mensajes
         messages = history + [{"role": "user", "content": message}]
         
-        # System prompt
-        system_prompt = """Eres un asistente especializado en crear contenido para un blog de triatlón.
+        # System prompt (personalizable por usuario)
+        default_system_prompt = """Eres un asistente especializado en crear contenido para un blog de triatlón.
 
 Cuando crees posts:
 - Máximo 800 palabras
@@ -103,6 +157,14 @@ Categorías disponibles:
 - training: Entrenamientos y planes
 - racing: Carreras y competición
 - training-science: Ciencia del entrenamiento"""
+        system_prompt = default_system_prompt
+        if user_id is not None:
+            try:
+                user = db_service.get_user_by_id(user_id)
+                if user and user.system_prompt:
+                    system_prompt = user.system_prompt
+            except Exception:
+                pass
         
         # Convertir history a formato OpenAI
         oa_messages = [{"role": "system", "content": system_prompt}]
@@ -129,11 +191,15 @@ Categorías disponibles:
             }
         ]
 
+        force_create_post = self._should_force_create_post(message, history)
+        tool_choice = {"type": "function", "function": {"name": "create_post"}} if force_create_post else "auto"
+
         response = await asyncio.to_thread(
             self.client.chat.completions.create,
             model=self.model,
             messages=oa_messages,
             tools=oa_tools,
+            tool_choice=tool_choice,
             max_completion_tokens=2048
         )
 
@@ -143,6 +209,8 @@ Categorías disponibles:
         choice = response.choices[0]
         message_obj = choice.message
         tool_calls = getattr(message_obj, "tool_calls", None)
+
+        post_info = None
 
         if tool_calls:
             for call in tool_calls:
@@ -160,7 +228,8 @@ Categorías disponibles:
                         result = await post_service.create_post(
                             titulo=parsed['titulo'],
                             categoria=parsed['categoria'],
-                            idea=parsed['contenido']
+                            idea=parsed['contenido'],
+                            user_id=user_id
                         )
                         logger.info(f"   ✅ post_service.create_post finished: {result.get('success')}")
                     except Exception as e:
@@ -168,10 +237,12 @@ Categorías disponibles:
                         result = {"success": False, "error": str(e)}
 
                     tool_results.append({"tool": tool_name, "result": result})
+                    if result.get("success"):
+                        post_info = result.get("post")
 
                 elif tool_name == "list_posts":
                     logger.info("   ➡️ Calling db_service.get_all_posts...")
-                    posts = db_service.get_all_posts()
+                    posts = db_service.get_all_posts(user_id=user_id)
                     result = {'posts': posts}
                     tool_results.append({"tool": tool_name, "result": result})
 
@@ -180,7 +251,12 @@ Categorías disponibles:
                 post_data = post_created_result['result'].get('post', {})
                 title = post_data.get('titulo', 'Sin título')
                 code = post_data.get('codigo', 'N/A')
-                assistant_message = f"✅ **Post creado exitosamente**\n\n**Título:** {title}\n**Código:** `{code}`\n\nEl post ha sido guardado y ya puedes verlo en el panel. ¿Te gustaría generar las imágenes o adaptar el texto para redes sociales?"
+                assistant_message = (
+                    f"✅ **Post creado exitosamente**\n\n"
+                    f"**Título:** {title}\n**Código:** `{code}`\n\n"
+                    "✅ **Terminado.** Puedes continuar en el panel.\n\n"
+                    f"[Ir al post](/panel/?codigo={code})"
+                )
             else:
                 import json
                 oa_messages.append({
@@ -211,16 +287,64 @@ Categorías disponibles:
                 assistant_message = follow_up.choices[0].message.content or ""
         else:
             assistant_message = message_obj.content or ""
-        
+
+            # Fallback: si el usuario quiere crear post y no hubo tool_calls
+            try:
+                if force_create_post:
+                    logger.warning("⚠️ create_post sin tool_calls; usando fallback de última instancia")
+                    payload = await self._generate_post_payload(message, system_prompt)
+                    if payload:
+                        from services.post_service import PostService
+                        post_service = PostService()
+                        categoria = payload.get("categoria") or "training"
+                        if categoria not in ("training", "racing", "training-science"):
+                            categoria = "training"
+                        result = await post_service.create_post(
+                            titulo=payload.get("titulo") or "Nuevo post",
+                            categoria=categoria,
+                            idea=payload.get("contenido") or "",
+                            user_id=user_id
+                        )
+                        tool_results.append({"tool": "create_post", "result": result})
+                        if result.get("success"):
+                            post_info = result.get("post")
+                            post_data = result.get("post", {})
+                            title = post_data.get("titulo", "Sin título")
+                            code = post_data.get("codigo", "N/A")
+                            assistant_message = (
+                                f"✅ **Post creado exitosamente**\n\n"
+                                f"**Título:** {title}\n**Código:** `{code}`\n\n"
+                                "✅ **Terminado.** Puedes continuar en el panel.\n\n"
+                                f"[Ir al post](/panel/?codigo={code})"
+                            )
+            except Exception as e:
+                logger.error("Fallback create_post failed: %s", e)
+
+        post_codigo = post_info.get("codigo") if post_info else None
+        post_title = post_info.get("titulo") if post_info else None
+        post_url = f"/panel/?codigo={post_codigo}" if post_codigo else None
+
+        if post_codigo and "Terminado" not in (assistant_message or ""):
+            assistant_message = (
+                (assistant_message or "").rstrip()
+                + "\n\n✅ **Terminado.** Puedes continuar en el panel.\n\n"
+                + f"[Ir al post]({post_url})"
+            )
+
+        tool_used = "create_post" if post_codigo else (tool_results[0]['tool'] if tool_results else None)
+
         return {
             'success': True,
             'response': assistant_message,
-            'tool_used': tool_results[0]['tool'] if tool_results else None,
+            'tool_used': tool_used,
             'tool_results': tool_results,
+            'post_codigo': post_codigo,
+            'post_title': post_title,
+            'post_url': post_url,
             'history': messages + [{"role": "assistant", "content": assistant_message}]
         }
     
-    async def generate_adapted_texts(self, codigo: str, redes: Dict[str, bool]) -> Dict:
+    async def generate_adapted_texts(self, codigo: str, redes: Dict[str, bool], user_id: Optional[int] = None) -> Dict:
         """
         Genera textos adaptados para redes sociales
         
@@ -228,6 +352,12 @@ Categorías disponibles:
         - Panel Web: Validar Fase 1 (BASE_TEXT_AWAITING)
         - API: POST /api/validate-phase
         """
+        # Verificar ownership si aplica
+        if user_id is not None:
+            post = db_service.get_post_by_codigo(codigo, user_id=user_id)
+            if not post:
+                raise Exception("Post no encontrado")
+
         # Leer base.txt
         base_text = self.file_service.read_file(codigo, 'textos', f"{codigo}_base.txt")
         
@@ -290,6 +420,28 @@ Reglas:
             errors.append(f"json_parse: {str(e)}")
             data = {}
 
+        # Fallback: si no hay datos útiles, generar uno por uno por red
+        if not data:
+            logger.warning("⚠️ JSON vacío en textos adaptados. Usando fallback por red.")
+            for platform, desc in active_platforms.items():
+                per_prompt = f"""Adapta este texto para {desc}.
+
+Texto original:
+{base_text}
+
+Reglas:
+- Devuelve SOLO el texto final, sin JSON ni explicaciones.
+"""
+                try:
+                    data[platform] = await self._openai_chat(
+                        messages=[{"role": "user", "content": per_prompt}],
+                        max_tokens=1200,
+                        debug_label=f"adapted_text_{platform}"
+                    )
+                except Exception as e:
+                    logger.error(f"  ❌ Error generando {platform} en fallback: {e}")
+                    errors.append(f"{platform}: {str(e)}")
+
         for platform in active_platforms.keys():
             adapted_text = data.get(platform)
             if not adapted_text:
@@ -301,7 +453,7 @@ Reglas:
                 self.file_service.save_file(codigo, 'textos', filename, adapted_text)
 
                 checkbox_field = f'{platform}_txt'
-                db_service.update_post(codigo, {checkbox_field: True})
+                db_service.update_post(codigo, {checkbox_field: True}, user_id=user_id)
 
                 generated.append(filename)
                 logger.info(f"  ✅ {filename} generado")
@@ -316,7 +468,7 @@ Reglas:
             'message': f"✅ {len(generated)} textos adaptados generados"
         }
     
-    async def generate_image_prompt(self, codigo: str) -> Dict:
+    async def generate_image_prompt(self, codigo: str, user_id: Optional[int] = None) -> Dict:
         """
         Genera prompt para imagen usando Claude
         
@@ -324,6 +476,11 @@ Reglas:
         - Panel Web: Validar Fase 2 (ADAPTED_TEXTS_AWAITING)
         - MCP: generate_instructions_from_post
         """
+        if user_id is not None:
+            post = db_service.get_post_by_codigo(codigo, user_id=user_id)
+            if not post:
+                raise Exception("Post no encontrado")
+
         # Leer base.txt
         base_text = self.file_service.read_file(codigo, 'textos', f"{codigo}_base.txt")
         
@@ -370,7 +527,7 @@ Genera SOLO el prompt de imagen."""
         self.file_service.save_file(codigo, 'textos', filename, image_prompt)
         
         # Actualizar checkbox en BD
-        db_service.update_post(codigo, {'prompt_imagen_base_txt': True})
+        db_service.update_post(codigo, {'prompt_imagen_base_txt': True}, user_id=user_id)
         
         return {
             'success': True,
@@ -379,13 +536,18 @@ Genera SOLO el prompt de imagen."""
             'message': f"✅ Prompt de imagen generado"
         }
     
-    async def generate_video_script(self, codigo: str) -> Dict:
+    async def generate_video_script(self, codigo: str, user_id: Optional[int] = None) -> Dict:
         """
         Genera script para video usando Claude
         
         Usado por:
         - Panel Web: Validar Fase 5 (IMAGE_FORMATS_AWAITING)
         """
+        if user_id is not None:
+            post = db_service.get_post_by_codigo(codigo, user_id=user_id)
+            if not post:
+                raise Exception("Post no encontrado")
+
         # Leer base.txt
         base_text = self.file_service.read_file(codigo, 'textos', f"{codigo}_base.txt")
         
@@ -441,7 +603,7 @@ Genera SOLO el script."""
         self.file_service.save_file(codigo, 'textos', filename, video_script)
         
         # Actualizar checkbox en BD
-        db_service.update_post(codigo, {'script_video_base_txt': True})
+        db_service.update_post(codigo, {'script_video_base_txt': True}, user_id=user_id)
         
         return {
             'success': True,

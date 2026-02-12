@@ -4,24 +4,30 @@ Servicio de base de datos MySQL para reemplazar sheets_service.py
 Proporciona las mismas funciones pero usando MySQL en lugar de Google Sheets
 """
 from database import SessionLocal
-from db_models import Post, SocialToken, SocialPage
+from db_models import Post, SocialToken, SocialPage, User
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 
-def get_all_posts() -> List[Dict]:
-    """Obtiene todos los posts de MySQL"""
+def get_all_posts(user_id: Optional[int] = None) -> List[Dict]:
+    """Obtiene todos los posts de MySQL (opcionalmente filtrados por usuario)"""
     db = SessionLocal()
     try:
-        posts = db.query(Post).all()
+        query = db.query(Post)
+        if user_id is not None:
+            query = query.filter(Post.user_id == user_id)
+        posts = query.all()
         return [post.to_dict() for post in posts]
     finally:
         db.close()
 
-def get_post_by_codigo(codigo: str) -> Optional[Dict]:
-    """Obtiene un post por su código"""
+def get_post_by_codigo(codigo: str, user_id: Optional[int] = None) -> Optional[Dict]:
+    """Obtiene un post por su código (opcionalmente verificando ownership)"""
     db = SessionLocal()
     try:
-        post = db.query(Post).filter(Post.codigo == codigo).first()
+        query = db.query(Post).filter(Post.codigo == codigo)
+        if user_id is not None:
+            query = query.filter(Post.user_id == user_id)
+        post = query.first()
         return post.to_dict() if post else None
     finally:
         db.close()
@@ -49,7 +55,8 @@ def create_post(data: Dict) -> Dict:
             idea=data.get('idea', ''),
             estado=data.get('estado', 'DRAFT'),
             drive_folder_id=data.get('drive_folder_id'),
-            urls=data.get('urls')
+            urls=data.get('urls'),
+            user_id=data.get('user_id')
         )
         
         db.add(post)
@@ -63,11 +70,14 @@ def create_post(data: Dict) -> Dict:
     finally:
         db.close()
 
-def update_post(codigo: str, data: Dict) -> Dict:
-    """Actualiza un post existente"""
+def update_post(codigo: str, data: Dict, user_id: Optional[int] = None) -> Dict:
+    """Actualiza un post existente (opcionalmente verificando ownership)"""
     db = SessionLocal()
     try:
-        post = db.query(Post).filter(Post.codigo == codigo).first()
+        query = db.query(Post).filter(Post.codigo == codigo)
+        if user_id is not None:
+            query = query.filter(Post.user_id == user_id)
+        post = query.first()
         
         if not post:
             raise ValueError(f"Post {codigo} no encontrado")
@@ -178,11 +188,14 @@ def update_post(codigo: str, data: Dict) -> Dict:
     finally:
         db.close()
 
-def delete_post(codigo: str) -> bool:
-    """Elimina un post"""
+def delete_post(codigo: str, user_id: Optional[int] = None) -> bool:
+    """Elimina un post (opcionalmente verificando ownership)"""
     db = SessionLocal()
     try:
-        post = db.query(Post).filter(Post.codigo == codigo).first()
+        query = db.query(Post).filter(Post.codigo == codigo)
+        if user_id is not None:
+            query = query.filter(Post.user_id == user_id)
+        post = query.first()
         
         if not post:
             return False
@@ -197,11 +210,14 @@ def delete_post(codigo: str) -> bool:
     finally:
         db.close()
 
-def get_social_token(platform: str) -> Optional[Dict]:
-    """Obtiene el token de una red social"""
+def get_social_token(platform: str, user_id: Optional[int] = None) -> Optional[Dict]:
+    """Obtiene el token de una red social (opcionalmente por usuario)"""
     db = SessionLocal()
     try:
-        token = db.query(SocialToken).filter(SocialToken.platform == platform).first()
+        query = db.query(SocialToken).filter(SocialToken.platform == platform)
+        if user_id is not None:
+            query = query.filter(SocialToken.user_id == user_id)
+        token = query.first()
         
         if not token:
             return None
@@ -216,11 +232,14 @@ def get_social_token(platform: str) -> Optional[Dict]:
     finally:
         db.close()
 
-def get_all_social_tokens() -> List[Dict]:
-    """Obtiene todos los tokens de redes sociales"""
+def get_all_social_tokens(user_id: Optional[int] = None) -> List[Dict]:
+    """Obtiene todos los tokens de redes sociales (opcionalmente por usuario)"""
     db = SessionLocal()
     try:
-        tokens = db.query(SocialToken).all()
+        query = db.query(SocialToken)
+        if user_id is not None:
+            query = query.filter(SocialToken.user_id == user_id)
+        tokens = query.all()
         
         return [{
             'platform': token.platform,
@@ -309,11 +328,14 @@ def save_social_token(platform: str, token_data: Dict = None,
         db.close()
 
 
-def delete_social_token(platform: str) -> bool:
-    """Elimina un token de red social"""
+def delete_social_token(platform: str, user_id: Optional[int] = None) -> bool:
+    """Elimina un token de red social (opcionalmente por usuario)"""
     db = SessionLocal()
     try:
-        token = db.query(SocialToken).filter(SocialToken.platform == platform).first()
+        query = db.query(SocialToken).filter(SocialToken.platform == platform)
+        if user_id is not None:
+            query = query.filter(SocialToken.user_id == user_id)
+        token = query.first()
         
         if not token:
             return False
@@ -328,9 +350,9 @@ def delete_social_token(platform: str) -> bool:
     finally:
         db.close()
 
-def get_social_tokens() -> Dict:
+def get_social_tokens(user_id: Optional[int] = None) -> Dict:
     """Obtiene todos los tokens organizados por plataforma"""
-    tokens_list = get_all_social_tokens()
+    tokens_list = get_all_social_tokens(user_id=user_id)
     tokens_dict = {}
     
     for token in tokens_list:
@@ -399,29 +421,106 @@ def upsert_social_page(page: Dict) -> Dict:
         db.close()
 
 
-def list_social_pages(platform: str = None) -> List[Dict]:
-    """Lista páginas guardadas (opcionalmente filtradas por plataforma)."""
+def list_social_pages(platform: str = None, user_id: Optional[int] = None) -> List[Dict]:
+    """Lista páginas guardadas (opcionalmente filtradas por plataforma y usuario)."""
     db = SessionLocal()
     try:
         q = db.query(SocialPage)
         if platform:
             q = q.filter(SocialPage.platform == platform)
+        if user_id is not None:
+            q = q.filter(SocialPage.user_id == user_id)
         return [p.to_dict() for p in q.all()]
     finally:
         db.close()
 
-def get_social_page_by_page_id(page_id: str) -> Optional[Dict]:
+def get_social_page_by_page_id(page_id: str, user_id: Optional[int] = None) -> Optional[Dict]:
     db = SessionLocal()
     try:
-        p = db.query(SocialPage).filter(SocialPage.page_id == page_id).first()
+        q = db.query(SocialPage).filter(SocialPage.page_id == page_id)
+        if user_id is not None:
+            q = q.filter(SocialPage.user_id == user_id)
+        p = q.first()
         return p.to_dict() if p else None
     finally:
         db.close()
 
-def get_social_page_by_instagram_id(instagram_account_id: str) -> Optional[Dict]:
+# ==============================
+# Users
+# ==============================
+def get_user_by_id(user_id: int) -> Optional[User]:
     db = SessionLocal()
     try:
-        p = db.query(SocialPage).filter(SocialPage.instagram_account_id == instagram_account_id).first()
+        return db.query(User).filter(User.id == user_id).first()
+    finally:
+        db.close()
+
+def get_user_by_email(email: str) -> Optional[User]:
+    db = SessionLocal()
+    try:
+        return db.query(User).filter(User.email == email).first()
+    finally:
+        db.close()
+
+def get_user_count() -> int:
+    db = SessionLocal()
+    try:
+        return db.query(User).count()
+    finally:
+        db.close()
+
+def create_user(email: str, password_hash: str, name: Optional[str] = None) -> User:
+    db = SessionLocal()
+    try:
+        user = User(email=email, password_hash=password_hash, name=name)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return user
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+def update_user(user_id: int, updates: Dict) -> Optional[User]:
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return None
+        for key, value in updates.items():
+            if hasattr(user, key):
+                setattr(user, key, value)
+        db.commit()
+        db.refresh(user)
+        return user
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+def claim_unowned_posts(user_id: int) -> int:
+    """Asigna posts sin owner al usuario indicado (para migración inicial)."""
+    db = SessionLocal()
+    try:
+        updated = db.query(Post).filter(Post.user_id == None).update({Post.user_id: user_id})
+        db.commit()
+        return updated or 0
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+def get_social_page_by_instagram_id(instagram_account_id: str, user_id: Optional[int] = None) -> Optional[Dict]:
+    db = SessionLocal()
+    try:
+        q = db.query(SocialPage).filter(SocialPage.instagram_account_id == instagram_account_id)
+        if user_id is not None:
+            q = q.filter(SocialPage.user_id == user_id)
+        p = q.first()
         return p.to_dict() if p else None
     finally:
         db.close()

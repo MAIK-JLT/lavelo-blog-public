@@ -43,7 +43,7 @@ class ImageService:
         if fal_key:
             os.environ['FAL_KEY'] = fal_key
     
-    async def generate_image(self, codigo: str, num_images: int = 2) -> Dict:
+    async def generate_image(self, codigo: str, num_images: int = 2, user_id: int = None) -> Dict:
         """
         Genera imagen base usando Fal.ai SeaDream 4.0
         Soporta hasta 2 imágenes de referencia
@@ -54,6 +54,11 @@ class ImageService:
         """
         print(f"\n🎨 === GENERANDO IMAGEN BASE PARA {codigo} ===")
         
+        if user_id:
+            post = db_service.get_post_by_codigo(codigo, user_id=user_id)
+            if not post:
+                raise Exception("Post no encontrado")
+
         # 1. Leer prompt
         prompt_filename = f"{codigo}_prompt_imagen.txt"
         prompt = self.file_service.read_file(codigo, 'textos', prompt_filename)
@@ -186,7 +191,7 @@ class ImageService:
                 'shorts_9x16_mp4': False,
                 'tiktok_9x16_mp4': False,
                 'estado': 'IMAGE_BASE_AWAITING'
-            })
+            }, user_id=user_id)
             print(f"✅ Checkbox imagen_base actualizado y fases posteriores reseteadas")
         
         return {
@@ -196,7 +201,7 @@ class ImageService:
             'references_used': len(reference_images)
         }
     
-    async def format_images(self, codigo: str) -> Dict:
+    async def format_images(self, codigo: str, user_id: int = None) -> Dict:
         """
         Formatea imagen base para diferentes redes sociales usando Cloudinary AI
         (crop inteligente con detección de sujetos)
@@ -212,6 +217,11 @@ class ImageService:
         
         print(f"\n🖼️ === FORMATEANDO IMÁGENES CON CLOUDINARY AI ===")
         
+        if user_id:
+            post = db_service.get_post_by_codigo(codigo, user_id=user_id)
+            if not post:
+                raise Exception("Post no encontrado")
+
         # 1. Leer imagen base
         base_filename = f"{codigo}_imagen_base.png"
         image_bytes = self.file_service.read_binary_file(codigo, 'imagenes', base_filename)
@@ -298,7 +308,7 @@ class ImageService:
                     
                     # Actualizar checkbox en BD
                     checkbox_field = f'{name}_png'
-                    db_service.update_post(codigo, {checkbox_field: True})
+                    db_service.update_post(codigo, {checkbox_field: True}, user_id=user_id)
                     
                     formatted.append(filename)
                     print(f"    ✅ {filename} ({specs['width']}x{specs['height']})")
@@ -322,19 +332,24 @@ class ImageService:
                 os.unlink(tmp_path)
             raise Exception(f'Error en Cloudinary: {str(e)}')
     
-    async def upload_manual_image(self, codigo: str, filename: str, image_bytes: bytes) -> Dict:
+    async def upload_manual_image(self, codigo: str, filename: str, image_bytes: bytes, user_id: int = None) -> Dict:
         """
         Sube una imagen manualmente (alternativa a generación con IA)
         
         Usado por:
         - Panel Web: Botón "Subir Imagen"
         """
+        if user_id:
+            post = db_service.get_post_by_codigo(codigo, user_id=user_id)
+            if not post:
+                raise Exception("Post no encontrado")
+
         # Guardar imagen
         self.file_service.save_binary_file(codigo, 'imagenes', filename, image_bytes)
         
         # Si es imagen_base, actualizar checkbox
         if 'imagen_base' in filename:
-            db_service.update_post(codigo, {'imagen_base_png': True})
+            db_service.update_post(codigo, {'imagen_base_png': True}, user_id=user_id)
         
         return {
             'success': True,

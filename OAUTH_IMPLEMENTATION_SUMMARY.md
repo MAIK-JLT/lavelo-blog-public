@@ -9,7 +9,7 @@ Se ha implementado un **sistema completo de OAuth centralizado** para conectar y
 ## 📦 Archivos Creados/Modificados
 
 ### **Nuevos Archivos:**
-1. **`/panel/social_connect.html`** - Interfaz de gestión de conexiones
+1. **`/panel/publish.html`** - Publicación en redes con conexión OAuth integrada
 2. **`SOCIAL_TOKENS_SETUP.md`** - Guía de configuración completa
 3. **`OAUTH_IMPLEMENTATION_SUMMARY.md`** - Este archivo
 
@@ -98,7 +98,7 @@ Body: {
 
 ## 🎨 Interfaz de Usuario
 
-### **Panel de Conexiones** (`/panel/social_connect.html`)
+### **Panel de Publicación** (`/panel/publish.html`)
 
 **Características:**
 - ✅ Vista de estado de 5 redes sociales
@@ -113,7 +113,7 @@ Body: {
 
 **Acceso:**
 ```
-http://localhost:5001/panel/social_connect.html
+http://localhost:5001/panel/publish.html?codigo=YYYYMMDD-N
 ```
 
 ---
@@ -188,7 +188,7 @@ python server.py
 
 ```bash
 # Abrir panel de conexiones
-open http://localhost:5001/panel/social_connect.html
+open http://localhost:5001/panel/publish.html?codigo=YYYYMMDD-N
 
 # Click "Conectar Instagram" → Autorizar → Listo
 # Repetir para cada red social

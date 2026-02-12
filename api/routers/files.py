@@ -2,7 +2,7 @@
 Router de Files para FastAPI
 Endpoints para leer/escribir archivos (reemplaza Drive)
 """
-from fastapi import APIRouter, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, HTTPException, status, UploadFile, File, Request
 from fastapi.responses import Response, FileResponse
 from typing import Optional
 import sys
@@ -19,13 +19,20 @@ router = APIRouter(
 )
 
 @router.get("/{codigo}/{folder}/{filename}")
-async def get_file(codigo: str, folder: str, filename: str):
+async def get_file(codigo: str, folder: str, filename: str, request: Request):
     """
     Obtiene un archivo (texto o binario)
     
     Usado por: Panel web (cargar textos, imágenes)
     """
     try:
+        user_id = request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
+        post = db_service.get_post_by_codigo(codigo, user_id=user_id)
+        if not post:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post no encontrado")
+
         # Detectar si es texto o binario por extensión
         is_text = filename.endswith(('.txt', '.md', '.json', '.html', '.css', '.js'))
         
@@ -66,7 +73,7 @@ async def get_file(codigo: str, folder: str, filename: str):
         )
 
 @router.post("/{codigo}/{folder}/{filename}")
-async def save_file(codigo: str, folder: str, filename: str, content: dict):
+async def save_file(codigo: str, folder: str, filename: str, content: dict, request: Request):
     """
     Guarda un archivo de texto
     
@@ -75,6 +82,13 @@ async def save_file(codigo: str, folder: str, filename: str, content: dict):
     Usado por: Panel web (guardar textos editados)
     """
     try:
+        user_id = request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
+        post = db_service.get_post_by_codigo(codigo, user_id=user_id)
+        if not post:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post no encontrado")
+
         text_content = content.get('content', '')
         
         success = file_service.save_file(codigo, folder, filename, text_content)
@@ -88,7 +102,7 @@ async def save_file(codigo: str, folder: str, filename: str, content: dict):
         # Si es prompt de imagen, resetear fases dependientes
         if 'prompt_imagen' in filename:
             print(f"🔄 Prompt de imagen modificado, reseteando fases dependientes...")
-            post = db_service.get_post_by_codigo(codigo)
+            post = db_service.get_post_by_codigo(codigo, user_id=user_id)
             
             if post and post.get('estado') not in ['DRAFT', 'BASE_TEXT_AWAITING', 'ADAPTED_TEXTS_AWAITING', 'IMAGE_PROMPT_AWAITING']:
                 # Resetear checkboxes de imagen
@@ -100,7 +114,7 @@ async def save_file(codigo: str, folder: str, filename: str, content: dict):
                     'twitter_16x9_png': False,
                     'facebook_16x9_png': False,
                     'estado': 'IMAGE_PROMPT_AWAITING'
-                })
+                }, user_id=user_id)
                 print(f"✅ Fases de imagen reseteadas, estado → IMAGE_PROMPT_AWAITING")
 
             # Limpiar imágenes y metadata de variaciones anteriores
@@ -129,13 +143,20 @@ async def save_file(codigo: str, folder: str, filename: str, content: dict):
         )
 
 @router.post("/{codigo}/{folder}/upload")
-async def upload_file(codigo: str, folder: str, file: UploadFile = File(...)):
+async def upload_file(codigo: str, folder: str, file: UploadFile = File(...), request: Request = None):
     """
     Sube un archivo binario (imagen, video)
     
     Usado por: Panel web (subir imágenes manualmente)
     """
     try:
+        user_id = request.session.get('user_id') if request else None
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
+        post = db_service.get_post_by_codigo(codigo, user_id=user_id)
+        if not post:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post no encontrado")
+
         # Leer contenido del archivo
         data = await file.read()
         
@@ -165,13 +186,19 @@ async def upload_file(codigo: str, folder: str, file: UploadFile = File(...)):
         )
 
 @router.get("/{codigo}/{folder}")
-async def list_files(codigo: str, folder: str):
+async def list_files(codigo: str, folder: str, request: Request):
     """
     Lista archivos en una carpeta
     
     Usado por: Panel web (listar archivos disponibles)
     """
     try:
+        user_id = request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
+        post = db_service.get_post_by_codigo(codigo, user_id=user_id)
+        if not post:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post no encontrado")
         files = file_service.list_files(codigo, folder)
         return {
             'success': True,
@@ -185,13 +212,19 @@ async def list_files(codigo: str, folder: str):
         )
 
 @router.delete("/{codigo}/{folder}/{filename}")
-async def delete_file(codigo: str, folder: str, filename: str):
+async def delete_file(codigo: str, folder: str, filename: str, request: Request):
     """
     Elimina un archivo
     
     Usado por: Panel web (eliminar archivos)
     """
     try:
+        user_id = request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
+        post = db_service.get_post_by_codigo(codigo, user_id=user_id)
+        if not post:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post no encontrado")
         success = file_service.delete_file(codigo, folder, filename)
         
         if not success:
@@ -213,13 +246,16 @@ async def delete_file(codigo: str, folder: str, filename: str):
         )
 
 @router.get("/storage/info")
-async def get_storage_info():
+async def get_storage_info(request: Request):
     """
     Obtiene información del storage
     
     Usado por: Panel web (estadísticas)
     """
     try:
+        user_id = request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
         info = file_service.get_storage_info()
         return {
             'success': True,

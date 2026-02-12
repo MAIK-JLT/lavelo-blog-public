@@ -1,0 +1,56 @@
+# Cómo estructurar tus semanas para mejorar en triatlón: guía práctica y ejemplo de microciclo
+
+## Introducción
+
+Si eres triatleta y buscas mejorar de forma consistente, la clave está en estructurar semanas de entrenamiento que combinen volumen, intensidad y recuperación. En este post encontrarás principios basados en la ciencia y la experiencia, un ejemplo de microciclo práctico y recomendaciones para adaptar la carga a tu nivel.
+
+## Principios fundamentales
+
+### 1. Periodización y progresión
+La carga debe aumentar de forma gradual (10–20% por mes en volumen total como referencia) y alternar fases de acumulación y reducción para evitar sobreentrenamiento. Prioriza una sesión clave por disciplina cada semana (la más específica para tu objetivo).
+
+### 2. Intensidad controlada (zonas)
+Usa zonas simples: fácil (Z1), tempo/moderado (Z2), umbral (Z3) y alta intensidad/VO2 (Z4+). Una estrategia eficaz para triatlón es la distribución polarizada: ~75–80% del tiempo en Z1, 15–20% en Z2–Z3 y 5–10% en Z4+ para atletas con base aeróbica.
+
+### 3. Trabajo de transición y habilidad
+Incluye sesiones brick (ciclismo + carrera) una vez por semana para entrenar la adaptación neuromuscular y sesiones técnicas en natación para eficiencia.
+
+### 4. Recuperación y sueño
+La recuperación (sueño, nutrición y días de descanso activo) es tan importante como las sesiones duras. Programar 1–2 días de recuperación relativa por semana reduce el riesgo de lesión.
+
+## Ejemplo de microciclo (objetivo: triatlón olímpico, base con intensidad moderada)
+
+Semana tipo (6 sesiones + 1 día de recuperación):
+
+- Lunes: Natación técnica 45–60 min (calentamiento, drills, 8×100 a ritmo moderado, técnica final) — Z1–Z2.
+- Martes: Bicicleta 60–90 min con bloques de tempo (3×12 min a Z3 con 6 min recuperación) — terminar con 10–15 min fácil.
+- Miércoles: Carrera 45–60 min incluyendo 6×1 km a ritmo de competición (Z3) con 2–3 min trote recuperación.
+- Jueves: Natación resistencia 50 min (series largas: 5×400m a Z2) + fuerza específica 30 min (core y cadena posterior, 3 ejercicios, 3 series).
+- Viernes: Bicicleta intensa 45–60 min (intervalos VO2: 6×3 min a Z4 con 3 min recuperación) + transición a 15–20 min carrera fácil (brick corto).
+- Sábado: Rodaje largo bicicleta 2–3 h a Z1 (énfasis en cadencia eficiente) o 90 min si tiempo limitado.
+- Domingo: Carrera suave 45–75 min a Z1–Z2; opcional técnica de carrera o 20–30 min de fuerza ligera.
+
+Ajustes:
+- Atleta con menos tiempo: reducir volumen de bici a 60–90 min sábado y mantener intensidad.
+- Atleta avanzado: añadir otro día de sesiones de VO2 o incrementar series de umbral.
+
+### Ejemplo concreto de sesión de brick
+- Bicicleta: 45 min con 3×8 min a umbral (Z3) con 4 min fácil.
+- Transición inmediata a carrera: 20 min progresivos (5 min Z1, 10 min Z2, 5 min Z3).
+Beneficio: mejora la capacidad de mantener ritmo tras la bici y la economía de carrera.
+
+## Señales para ajustar la carga
+
+- Fatiga acumulada, sueño deficiente o caída del rendimiento → reducir 20–40% volumen y priorizar sueño.
+- Dolor persistente → consultar y reducir impacto (cambio bici por rodillo suave o natación).
+
+## Conclusión
+
+Estructurar semanas no es romperse la cabeza: combina una sesión clave por disciplina, integra bricks, respeta recuperación y usa una distribución de intensidad adecuada. Evalúa cada 3–4 semanas y ajusta según respuesta. Con consistencia y progresión controlada verás mejoras medibles en potencia, ritmo y eficiencia.
+
+## Referencias y lecturas
+
+- Seiler, S. "What is best practice for training intensity distribution?" International Journal of Sports Physiology and Performance, 2010.
+- Mujika, I. "Tapering and peaking for optimal performance." Sports Medicine.
+
+Tags: plan, entrenamiento, triatlón, periodización

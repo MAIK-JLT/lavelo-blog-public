@@ -2,7 +2,7 @@
 Router de Images para FastAPI
 Endpoints para generación y formateo de imágenes
 """
-from fastapi import APIRouter, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, status, UploadFile, File, Form, Request
 from pydantic import BaseModel
 from typing import Optional, List
 import sys
@@ -31,7 +31,7 @@ class SelectBaseImageRequest(BaseModel):
     filename: str
 
 @router.post("/generate-image")
-async def generate_image(request: GenerateImageRequest):
+async def generate_image(request: GenerateImageRequest, http_request: Request):
     """
     Genera imagen base usando Fal.ai SeaDream 4.0
     Soporta hasta 2 imágenes de referencia
@@ -39,7 +39,13 @@ async def generate_image(request: GenerateImageRequest):
     Usado por: Panel web (validar Fase 3)
     """
     try:
-        result = await image_service.generate_image(request.codigo, request.num_images)
+        user_id = http_request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
+        post = db_service.get_post_by_codigo(request.codigo, user_id=user_id)
+        if not post:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post no encontrado")
+        result = await image_service.generate_image(request.codigo, request.num_images, user_id=user_id)
         return result
     except Exception as e:
         raise HTTPException(
@@ -48,14 +54,20 @@ async def generate_image(request: GenerateImageRequest):
         )
 
 @router.post("/format-images")
-async def format_images(request: FormatImagesRequest):
+async def format_images(request: FormatImagesRequest, http_request: Request):
     """
     Formatea imagen base para diferentes redes sociales
     
     Usado por: Panel web (validar Fase 4)
     """
     try:
-        result = await image_service.format_images(request.codigo)
+        user_id = http_request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
+        post = db_service.get_post_by_codigo(request.codigo, user_id=user_id)
+        if not post:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post no encontrado")
+        result = await image_service.format_images(request.codigo, user_id=user_id)
         return result
     except Exception as e:
         raise HTTPException(
@@ -64,7 +76,7 @@ async def format_images(request: FormatImagesRequest):
         )
 
 @router.post("/upload-image/{codigo}")
-async def upload_image(codigo: str, file: UploadFile = File(...)):
+async def upload_image(codigo: str, file: UploadFile = File(...), http_request: Request = None):
     """
     Sube una imagen manualmente (alternativa a generación con IA)
     
@@ -74,7 +86,13 @@ async def upload_image(codigo: str, file: UploadFile = File(...)):
         # Leer contenido del archivo
         image_bytes = await file.read()
         
-        result = await image_service.upload_manual_image(codigo, file.filename, image_bytes)
+        user_id = http_request.session.get('user_id') if http_request else None
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
+        post = db_service.get_post_by_codigo(codigo, user_id=user_id)
+        if not post:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post no encontrado")
+        result = await image_service.upload_manual_image(codigo, file.filename, image_bytes, user_id=user_id)
         return result
     except Exception as e:
         raise HTTPException(
@@ -83,15 +101,21 @@ async def upload_image(codigo: str, file: UploadFile = File(...)):
         )
 
 @router.post("/select-base-image")
-async def select_base_image(request: SelectBaseImageRequest):
+async def select_base_image(request: SelectBaseImageRequest, http_request: Request):
     """
     Selecciona una variación como imagen base (copia a *_imagen_base.png)
     
     Usado por: Panel web (fase 4)
     """
     try:
+        user_id = http_request.session.get('user_id')
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
         codigo = request.codigo
         filename = request.filename
+        post = db_service.get_post_by_codigo(codigo, user_id=user_id)
+        if not post:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post no encontrado")
 
         if not filename or not filename.endswith(".png"):
             raise Exception("Filename inválido")
@@ -131,7 +155,7 @@ async def select_base_image(request: SelectBaseImageRequest):
             "shorts_9x16_mp4": False,
             "tiktok_9x16_mp4": False,
             "estado": "IMAGE_BASE_AWAITING"
-        })
+        }, user_id=user_id)
 
         return {"success": True, "message": "Imagen base actualizada"}
     except Exception as e:
@@ -148,7 +172,8 @@ async def improve_prompt_visual(
     ref1: Optional[UploadFile] = File(None),
     ref1_influence: Optional[float] = Form(0.5),
     ref2: Optional[UploadFile] = File(None),
-    ref2_influence: Optional[float] = Form(0.5)
+    ref2_influence: Optional[float] = Form(0.5),
+    http_request: Request = None
 ):
     """
     Mejora el prompt con selecciones visuales e imágenes de referencia
@@ -160,6 +185,12 @@ async def improve_prompt_visual(
         from services.file_service import file_service
         import db_service
         
+        user_id = http_request.session.get('user_id') if http_request else None
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
+        post = db_service.get_post_by_codigo(codigo, user_id=user_id)
+        if not post:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post no encontrado")
         content_service = ContentService()
         
         print(f"🎨 Mejorando prompt visual para post {codigo}")
@@ -230,7 +261,7 @@ async def improve_prompt_visual(
         
         # Resetear fases de imagen para regenerar con nuevo prompt
         print(f"🔄 Reseteando fases de imagen para regenerar...")
-        post = db_service.get_post_by_codigo(codigo)
+        post = db_service.get_post_by_codigo(codigo, user_id=user_id)
         
         if post and post.get('estado') not in ['DRAFT', 'BASE_TEXT_AWAITING', 'ADAPTED_TEXTS_AWAITING', 'IMAGE_PROMPT_AWAITING']:
             db_service.update_post(codigo, {
@@ -241,7 +272,7 @@ async def improve_prompt_visual(
                 'twitter_16x9_png': False,
                 'facebook_16x9_png': False,
                 'estado': 'IMAGE_PROMPT_AWAITING'
-            })
+            }, user_id=user_id)
             print(f"✅ Fases de imagen reseteadas, estado → IMAGE_PROMPT_AWAITING")
         
         return {

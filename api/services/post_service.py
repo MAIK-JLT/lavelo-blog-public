@@ -18,7 +18,7 @@ class PostService:
     def __init__(self):
         self.file_service = file_service
     
-    async def list_posts(self, limit: Optional[int] = None) -> List[Dict]:
+    async def list_posts(self, limit: Optional[int] = None, user_id: Optional[int] = None) -> List[Dict]:
         """
         Lista todos los posts desde MySQL
         
@@ -27,14 +27,14 @@ class PostService:
         - MCP: list_posts()
         - API: GET /api/posts
         """
-        posts = db_service.get_all_posts()
+        posts = db_service.get_all_posts(user_id=user_id)
         
         if limit:
             posts = posts[:limit]
         
         return posts
     
-    async def get_post(self, codigo: str) -> Optional[Dict]:
+    async def get_post(self, codigo: str, user_id: Optional[int] = None) -> Optional[Dict]:
         """
         Obtiene un post por código con información de archivos
         
@@ -43,7 +43,7 @@ class PostService:
         - MCP: get_post()
         - API: GET /api/posts/{codigo}
         """
-        post = db_service.get_post_by_codigo(codigo)
+        post = db_service.get_post_by_codigo(codigo, user_id=user_id)
         if not post:
             return None
         
@@ -73,7 +73,8 @@ class PostService:
         categoria: str,
         idea: Optional[str] = None,
         fecha_programada: Optional[str] = None,
-        hora_programada: Optional[str] = None
+        hora_programada: Optional[str] = None,
+        user_id: Optional[int] = None
     ) -> Dict:
         """
         Crea un nuevo post con carpeta en Drive
@@ -85,7 +86,7 @@ class PostService:
         """
         # Generar código YYYYMMDD-ref
         fecha_str = datetime.now().strftime('%Y%m%d')
-        posts_hoy = [p for p in db_service.get_all_posts() if p['codigo'].startswith(fecha_str)]
+        posts_hoy = [p for p in db_service.get_all_posts(user_id=user_id) if p['codigo'].startswith(fecha_str)]
         numero = len(posts_hoy) + 1
         codigo = f"{fecha_str}-{numero}"
         
@@ -101,7 +102,8 @@ class PostService:
             'estado': 'BASE_TEXT_AWAITING',  # Estado inicial correcto
             'drive_folder_id': None,  # Ya no usamos Drive
             'fecha_programada': fecha_programada,
-            'hora_programada': hora_programada
+            'hora_programada': hora_programada,
+            'user_id': user_id
         }
         
         success = db_service.create_post(post_data)
@@ -114,16 +116,16 @@ class PostService:
         self.file_service.save_file(codigo, 'textos', f"{codigo}_base.txt", content)
         
         # Marcar checkbox de base.txt
-        db_service.update_post(codigo, {'base_txt': True})
+        db_service.update_post(codigo, {'base_txt': True}, user_id=user_id)
         
         return {
             'success': True,
             'codigo': codigo,
-            'post': db_service.get_post_by_codigo(codigo),
+            'post': db_service.get_post_by_codigo(codigo, user_id=user_id),
             'message': f"✅ Post {codigo} creado exitosamente"
         }
     
-    async def update_post(self, codigo: str, updates: Dict) -> Dict:
+    async def update_post(self, codigo: str, updates: Dict, user_id: Optional[int] = None) -> Dict:
         """
         Actualiza un post
         
@@ -131,18 +133,18 @@ class PostService:
         - Panel Web: Guardar cambios
         - API: PATCH /api/posts/{codigo}
         """
-        success = db_service.update_post(codigo, updates)
+        success = db_service.update_post(codigo, updates, user_id=user_id)
         
         if not success:
             raise Exception(f"Error actualizando post {codigo}")
         
         return {
             'success': True,
-            'post': db_service.get_post_by_codigo(codigo),
+            'post': db_service.get_post_by_codigo(codigo, user_id=user_id),
             'message': f"✅ Post {codigo} actualizado"
         }
     
-    async def delete_post(self, codigo: str) -> Dict:
+    async def delete_post(self, codigo: str, user_id: Optional[int] = None) -> Dict:
         """
         Elimina un post
         
@@ -150,7 +152,7 @@ class PostService:
         - Panel Web: Botón "Eliminar"
         - API: DELETE /api/posts/{codigo}
         """
-        success = db_service.delete_post(codigo)
+        success = db_service.delete_post(codigo, user_id=user_id)
         
         if not success:
             raise Exception(f"Error eliminando post {codigo}")

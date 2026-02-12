@@ -64,6 +64,7 @@ class Post(Base):
     feedback = Column(Text)  # AJ: Feedback
     
     # Metadata (no en Sheets)
+    user_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -119,6 +120,7 @@ class Post(Base):
             'feedback': self.feedback,
             
             # Metadata
+            'user_id': self.user_id,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
@@ -154,6 +156,10 @@ class User(Base):
     __tablename__ = 'users'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
+    email = Column(String(255), unique=True, nullable=True)
+    password_hash = Column(String(255), nullable=True)
+    name = Column(String(255), nullable=True)
+    system_prompt = Column(Text, nullable=True)
     instagram_id = Column(String(255), unique=True, nullable=True)  # ID único de Instagram
     instagram_username = Column(String(255))
     facebook_id = Column(String(255), unique=True, nullable=True)  # ID único de Facebook
@@ -176,6 +182,9 @@ class User(Base):
         """Convierte el objeto a diccionario"""
         return {
             'id': self.id,
+            'email': self.email,
+            'name': self.name,
+            'system_prompt': self.system_prompt,
             'instagram_id': self.instagram_id,
             'instagram_username': self.instagram_username,
             'facebook_id': self.facebook_id,

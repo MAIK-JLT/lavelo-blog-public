@@ -19,12 +19,16 @@ else:
     load_dotenv(dotenv_path=default_env)
 
 # Configurar logging
+# Crear carpeta logs si no existe
+log_dir = os.path.join(os.path.dirname(__file__), '..', 'logs')
+os.makedirs(log_dir, exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),  # Console
-        logging.FileHandler('/var/www/vhosts/lavelo.es/blog/logs/lavelo_api.log')  # Archivo
+        logging.FileHandler(os.path.join(log_dir, 'lavelo_api.log'))  # Archivo relativo
     ]
 )
 logger = logging.getLogger(__name__)
@@ -91,7 +95,7 @@ falai_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'fala
 # (para que /api/* tenga prioridad sobre archivos estáticos)
 
 # Incluir routers
-from routers import posts, files, content, images, videos, validation, social
+from routers import posts, files, content, images, videos, validation, social, auth
 
 logger.info("🚀 Lavelo Blog API iniciada (FastAPI)")
 logger.info(f"📁 Panel path: {panel_path}")
@@ -104,6 +108,7 @@ app.include_router(images.router)
 app.include_router(videos.router)
 app.include_router(validation.router)
 app.include_router(social.router)
+app.include_router(auth.router)
 
 logger.info("✅ Todos los routers registrados")
 

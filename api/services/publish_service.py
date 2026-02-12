@@ -54,9 +54,9 @@ class PublishService:
             if page_id or instagram_account_id:
                 page_rec = None
                 if page_id:
-                    page_rec = db_service.get_social_page_by_page_id(page_id)
+                    page_rec = db_service.get_social_page_by_page_id(page_id, user_id=user_id)
                 if not page_rec and instagram_account_id:
-                    page_rec = db_service.get_social_page_by_instagram_id(instagram_account_id)
+                    page_rec = db_service.get_social_page_by_instagram_id(instagram_account_id, user_id=user_id)
                 if not page_rec:
                     return {'success': False, 'error': 'Página/IG seleccionada no encontrada. Reconecta Instagram.'}
                 access_token = page_rec.get('page_access_token')
@@ -134,7 +134,7 @@ class PublishService:
             return {'success': False, 'error': str(e)}
     
     def publish_to_facebook(self, codigo: str, message: str = None,
-                            page_id: str = None) -> Dict:
+                            page_id: str = None, user_id: int = None) -> Dict:
         """
         Publica en Facebook
         
@@ -149,13 +149,13 @@ class PublishService:
             # Obtener token de página
             access_token = None
             if page_id:
-                page_rec = db_service.get_social_page_by_page_id(page_id)
+                page_rec = db_service.get_social_page_by_page_id(page_id, user_id=user_id)
                 if not page_rec:
                     return {'success': False, 'error': 'Página seleccionada no encontrada. Reconecta Facebook/Instagram.'}
                 access_token = page_rec.get('page_access_token')
             else:
                 # Fallback a token global previo (si existiese)
-                tokens = db_service.get_social_tokens()
+                tokens = db_service.get_social_tokens(user_id=user_id)
                 if 'instagram' not in tokens or not tokens['instagram']:
                     return {'success': False, 'error': 'Facebook/Instagram no está conectado'}
                 token_data = tokens['instagram']
@@ -205,7 +205,7 @@ class PublishService:
             print(f"❌ Error publicando en Facebook: {e}")
             return {'success': False, 'error': str(e)}
     
-    def publish_to_linkedin(self, codigo: str, text: str = None) -> Dict:
+    def publish_to_linkedin(self, codigo: str, text: str = None, user_id: int = None) -> Dict:
         """
         Publica en LinkedIn
         
@@ -218,7 +218,7 @@ class PublishService:
         """
         try:
             # Obtener token
-            tokens = db_service.get_social_tokens()
+            tokens = db_service.get_social_tokens(user_id=user_id)
             if 'linkedin' not in tokens or not tokens['linkedin']:
                 return {'success': False, 'error': 'LinkedIn no está conectado'}
             
@@ -281,7 +281,7 @@ class PublishService:
             print(f"❌ Error publicando en LinkedIn: {e}")
             return {'success': False, 'error': str(e)}
     
-    def publish_to_twitter(self, codigo: str, text: str = None) -> Dict:
+    def publish_to_twitter(self, codigo: str, text: str = None, user_id: int = None) -> Dict:
         """
         Publica en Twitter
         
@@ -294,7 +294,7 @@ class PublishService:
         """
         try:
             # Obtener token
-            tokens = db_service.get_social_tokens()
+            tokens = db_service.get_social_tokens(user_id=user_id)
             if 'twitter' not in tokens or not tokens['twitter']:
                 return {'success': False, 'error': 'Twitter no está conectado'}
             
@@ -345,7 +345,7 @@ class PublishService:
             print(f"❌ Error publicando en Twitter: {e}")
             return {'success': False, 'error': str(e)}
     
-    def publish_to_tiktok(self, codigo: str, description: str = None) -> Dict:
+    def publish_to_tiktok(self, codigo: str, description: str = None, user_id: int = None) -> Dict:
         """
         Publica en TikTok
         
@@ -358,7 +358,7 @@ class PublishService:
         """
         try:
             # Obtener token
-            tokens = db_service.get_social_tokens()
+            tokens = db_service.get_social_tokens(user_id=user_id)
             if 'tiktok' not in tokens or not tokens['tiktok']:
                 return {'success': False, 'error': 'TikTok no está conectado'}
             
@@ -375,7 +375,8 @@ class PublishService:
             return {'success': False, 'error': str(e)}
     
     def publish_to_all(self, codigo: str, platforms: list = None,
-                       page_id: str = None, instagram_account_id: str = None) -> Dict:
+                       page_id: str = None, instagram_account_id: str = None,
+                       user_id: int = None) -> Dict:
         """
         Publica en múltiples plataformas
         
@@ -388,7 +389,7 @@ class PublishService:
         """
         if not platforms:
             # Obtener plataformas conectadas
-            tokens = db_service.get_social_tokens()
+            tokens = db_service.get_social_tokens(user_id=user_id)
             platforms = [p for p in tokens.keys() if tokens[p]]
         
         results = {}
@@ -397,16 +398,18 @@ class PublishService:
             if platform == 'instagram':
                 results['instagram'] = self.publish_to_instagram(codigo,
                                                                  page_id=page_id,
-                                                                 instagram_account_id=instagram_account_id)
+                                                                 instagram_account_id=instagram_account_id,
+                                                                 user_id=user_id)
             elif platform == 'facebook':
                 results['facebook'] = self.publish_to_facebook(codigo,
-                                                               page_id=page_id)
+                                                               page_id=page_id,
+                                                               user_id=user_id)
             elif platform == 'linkedin':
-                results['linkedin'] = self.publish_to_linkedin(codigo)
+                results['linkedin'] = self.publish_to_linkedin(codigo, user_id=user_id)
             elif platform == 'twitter':
-                results['twitter'] = self.publish_to_twitter(codigo)
+                results['twitter'] = self.publish_to_twitter(codigo, user_id=user_id)
             elif platform == 'tiktok':
-                results['tiktok'] = self.publish_to_tiktok(codigo)
+                results['tiktok'] = self.publish_to_tiktok(codigo, user_id=user_id)
         
         # Contar éxitos
         successful = sum(1 for r in results.values() if r.get('success'))

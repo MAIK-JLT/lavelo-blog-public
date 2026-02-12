@@ -1,0 +1,63 @@
+# Cómo organizar salidas en grupo con ritmos mixtos: estrategias para que todos disfruten y se exijan
+
+## Introducción
+
+Salir en carretera con amigos es una de las mejores maneras de entrenar y divertirse. El reto aparece cuando el pelotón tiene ciclistas de diferente nivel: unos tiran más fuerte y otros se quedan atrás. Aquí tienes estrategias prácticas y basadas en experiencia y ciencia para que la salida sea exigente, segura y disfrutable para todos.
+
+## Antes de salir: normas y roles
+
+### Breve briefing
+- Acordar el recorrido, el ritmo medio esperado y puntos clave (subidas, cruces, reagrupes).
+- Decidir reglas claras para segmentos (¿competimos? ¿neutralizado?).
+
+### Roles definidos
+- Líder/organizador: marca la ruta y controla paradas.
+- “Sweeper” (último): asegura que nadie se quede solo.
+- Pacers en subidas: los más fuertes regulan el ritmo para no romper el grupo.
+
+## Estrategias de ritmo y estructura
+
+### Zonas neutralizadas y reagrupes
+- Neutralizar tramos técnicos o peligrosos (descensos, pasos por pueblo) para priorizar seguridad.
+- Establecer reagrupes obligatorios: por ejemplo, arriba de cada puerto o cada 20–30 minutos.
+- Ejemplo: en una ruta de 3 horas, neutralizar el primer kilómetro tras una señal de salida y reagrupar cada 30–40 min.
+
+### Secciones “dirigidas” por esfuerzo relativo
+- Usar %FTP o RPE en lugar de velocidad: cada ciclista mantiene la misma intensidad relativa (ej. 85–90% FTP por 10–20 minutos) aunque la velocidad sea distinta.
+- Beneficio científico: trabajar según intensidad relativa iguala el estímulo de entrenamiento entre niveles (Allen & Coggan, principios de FTP).
+
+### Pacelines y rotaciones adaptadas
+- Rotaciones más cortas si hay diferencia grande de potencia (15–30 s para los fuertes, 45–60 s para grupos más parejos).
+- Los fuertes pueden tomar tirones largos en terreno llano y luego reducir la intensidad para esperar a quienes sufren.
+
+### Usar segmentos de Strava con reglas claras
+- Permitir intentos en segmentos solo si todos están de acuerdo y en tramos seguros.
+- Alternativa: cronometrar internamente (por tiempo) para evitar frenadas peligrosas cuando se aproxima un segmento famoso.
+
+### Micro-competiciones controladas
+- Sprints cortos y limitados (10–20 s) cada X minutos; o una “subida libre” pero con pacto de no dejar a más del 20% del grupo.
+- Ejemplo: cada 30 min, dos voluntarios hacen un ataque corto seguido de un minute de rodaje para reagrupar.
+
+## Planificar para los diferentes niveles
+
+### Grupos con subgrupos
+- Dividir el pelotón en dos/ tres ritmos con puntos de encuentro en la ruta.
+- Programar secciones en común (calentamiento, subidas objetivo, enfriamiento) para mantener cohesión.
+
+### Mesclar entrenamiento y disfrute
+- Introducir sesiones estructuradas: 2x20’ en umbral para quien quiere entrenar, mientras el resto hace series de tempo equivalentes por RPE.
+- Los más fuertes moderan y ayudan a crear estímulos sostenibles para los más lentos (ej. 15–30 min a ritmo constante con control de pulso o sensaciones).
+
+## Comunicación y seguridad
+
+- Señales claras (obstáculo, parada, relevo) y respeto en las rotaciones.
+- Política de descenso: quien baja más rápido espera abajo si el grupo se separó.
+- Llevar herramientas básicas y teléfono; acuerden qué hacer ante pinchazos o caídas.
+
+## Conclusión
+
+Un buen diseño de salida en grupo mezcla estructura y flexibilidad: normas claras, secciones neutralizadas, esfuerzos basados en intensidad relativa y micro-competencias controladas permiten que todos se exijan sin romper la convivencia. Coordina roles, usa reagrupes y aplica reglas para segmentos y sprints. Con ello la salida será segura, retadora y satisfactoria para todo el pelotón.
+
+## Referencias
+- Allen, H. & Coggan, A. (2019). Training and Racing with a Power Meter. (principios sobre FTP y zonas de potencia).
+- Seiler, S. (2010). What is best practice for training intensity distribution? International Journal of Sports Physiology and Performance.

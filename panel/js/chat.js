@@ -35,6 +35,7 @@ async function sendChatMessage() {
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({
                 message: message,
                 history: chatHistory
@@ -43,6 +44,11 @@ async function sendChatMessage() {
         });
         
         clearTimeout(timeoutId);
+
+        if (response.status === 401) {
+            window.location.href = '/panel/login.html';
+            return;
+        }
         
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -69,12 +75,13 @@ async function sendChatMessage() {
                 content: assistantMessage
             });
             
-            // Si se usó una herramienta, recargar según el tipo
+            // Si se usó una herramienta, manejar según el tipo
             if (data.tool_used === 'create_post') {
-                addMessage('assistant', '🔄 Recargando panel para mostrar el nuevo post...');
-                setTimeout(() => {
-                    location.reload();
-                }, 1500);
+                if (data.post_url) {
+                    addMessage('assistant', `✅ Terminado. [Ir al post](${data.post_url})`);
+                } else {
+                    addMessage('assistant', '✅ Terminado. Ya puedes ver el post en el panel.');
+                }
             } else if (data.tool_used === 'regenerate_image') {
                 // Regenerar imagen: volver al panel principal
                 addMessage('assistant', '🎯 Volviendo al panel principal para regenerar...');
