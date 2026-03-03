@@ -13,7 +13,12 @@ class SocialService:
     """Servicio para gestionar conexiones OAuth con redes sociales"""
 
     def __init__(self):
-        self.oauth_configs = {
+        pass
+
+    @property
+    def oauth_configs(self):
+        """Lee las credenciales del entorno en cada acceso (lazy load)."""
+        return {
             'instagram': {
                 'client_id': os.getenv('INSTAGRAM_CLIENT_ID'),
                 'client_secret': os.getenv('INSTAGRAM_CLIENT_SECRET'),
