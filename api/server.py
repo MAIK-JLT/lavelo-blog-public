@@ -4038,7 +4038,7 @@ def connect_social_platform(platform):
         # Generar state para seguridad
         state = base64.urlsafe_b64encode(os.urandom(32)).decode('utf-8')
         session[f'{platform}_oauth_state'] = state
-        
+
         # Construir URL de autorización
         auth_params = {
             'client_id': config['client_id'],
@@ -4047,9 +4047,20 @@ def connect_social_platform(platform):
             'response_type': 'code',
             'state': state
         }
-        
-        auth_url = f"{config['auth_url']}?"
-        auth_url += '&'.join([f"{k}={v}" for k, v in auth_params.items()])
+
+        # Twitter OAuth 2.0 requiere PKCE
+        if platform == 'twitter':
+            import hashlib, secrets as _secrets
+            code_verifier = _secrets.token_urlsafe(64)
+            code_challenge = base64.urlsafe_b64encode(
+                hashlib.sha256(code_verifier.encode()).digest()
+            ).rstrip(b'=').decode()
+            auth_params['code_challenge'] = code_challenge
+            auth_params['code_challenge_method'] = 'S256'
+            session['twitter_code_verifier'] = code_verifier
+
+        from urllib.parse import urlencode
+        auth_url = f"{config['auth_url']}?{urlencode(auth_params)}"
         
         print(f"🔗 Redirigiendo a OAuth de {platform}")
         print(f"   URL: {auth_url}")
@@ -4281,6 +4292,66 @@ def exchange_code_for_token(platform, code, current_user_id):
                 "page_id": selected["id"],
                 "instagram_account_id": selected["instagram_id"],
                 "user_long_lived_token": user_long_token
+            }
+
+        elif platform == 'twitter':
+            client_id = os.getenv('TWITTER_CLIENT_ID')
+            client_secret = os.getenv('TWITTER_CLIENT_SECRET')
+
+            if not client_id or not client_secret:
+                print("❌ Twitter: TWITTER_CLIENT_ID o TWITTER_CLIENT_SECRET no configurados")
+                return None
+
+            redirect_uri = request.host_url.rstrip('/') + "/api/social/callback/twitter"
+            code_verifier = session.get('twitter_code_verifier')
+
+            if not code_verifier:
+                print("❌ Twitter: No se encontró code_verifier en sesión")
+                return None
+
+            import base64 as _b64
+            creds = _b64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+
+            token_resp = requests.post(
+                'https://api.twitter.com/2/oauth2/token',
+                headers={
+                    'Authorization': f'Basic {creds}',
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                data={
+                    'code': code,
+                    'grant_type': 'authorization_code',
+                    'redirect_uri': redirect_uri,
+                    'code_verifier': code_verifier,
+                }
+            )
+
+            if token_resp.status_code != 200:
+                print("❌ Twitter token error:", token_resp.text)
+                return None
+
+            token_json = token_resp.json()
+            access_token = token_json.get('access_token')
+
+            # Obtener info del usuario de Twitter
+            user_resp = requests.get(
+                'https://api.twitter.com/2/users/me',
+                headers={'Authorization': f'Bearer {access_token}'}
+            )
+            username = 'Twitter User'
+            twitter_user_id = None
+            if user_resp.status_code == 200:
+                user_data = user_resp.json().get('data', {})
+                username = user_data.get('name', user_data.get('username', 'Twitter User'))
+                twitter_user_id = user_data.get('id')
+
+            return {
+                'access_token': access_token,
+                'refresh_token': token_json.get('refresh_token'),
+                'expires_in': token_json.get('expires_in', 7200),
+                'username': username,
+                'user_id': twitter_user_id,
+                'user_long_lived_token': access_token
             }
 
     except Exception as e:
