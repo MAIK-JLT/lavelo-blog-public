@@ -50,6 +50,13 @@ class Post(Base):
     shorts_9x16_mp4 = Column(Boolean, default=False)  # Z: shorts_9x16.mp4
     tiktok_9x16_mp4 = Column(Boolean, default=False)  # AA: tiktok_9x16.mp4
     
+    # REDES SELECCIONADAS - Persistir qué redes eligió el usuario para este post
+    redes_instagram = Column(Boolean, default=False)
+    redes_linkedin = Column(Boolean, default=False)
+    redes_twitter = Column(Boolean, default=False)
+    redes_facebook = Column(Boolean, default=False)
+    redes_tiktok = Column(Boolean, default=False)
+
     # PUBLICACIÓN - Checkboxes (AB-AG)
     blog_published = Column(Boolean, default=False)  # AB: Blog
     instagram_published = Column(Boolean, default=False)  # AC: Instagram
@@ -106,6 +113,13 @@ class Post(Base):
             'shorts_9x16_mp4': self.shorts_9x16_mp4,
             'tiktok_9x16_mp4': self.tiktok_9x16_mp4,
             
+            # Redes seleccionadas
+            'redes_instagram': self.redes_instagram,
+            'redes_linkedin': self.redes_linkedin,
+            'redes_twitter': self.redes_twitter,
+            'redes_facebook': self.redes_facebook,
+            'redes_tiktok': self.redes_tiktok,
+
             # Publicación
             'blog_published': self.blog_published,
             'instagram_published': self.instagram_published,

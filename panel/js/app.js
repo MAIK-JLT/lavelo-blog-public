@@ -686,12 +686,12 @@ function updateNetworksFromPost(post) {
     if (!post) return;
 
     const networks = {
-        instagram: post.redes_instagram === 'TRUE',
-        linkedin: post.redes_linkedin === 'TRUE',
-        twitter: post.redes_twitter === 'TRUE',
-        facebook: post.redes_facebook === 'TRUE',
-        tiktok: post.redes_tiktok === 'TRUE',
-        blog: post.redes_blog === 'TRUE'
+        instagram: !!post.redes_instagram,
+        linkedin: !!post.redes_linkedin,
+        twitter: !!post.redes_twitter,
+        facebook: !!post.redes_facebook,
+        tiktok: !!post.redes_tiktok,
+        blog: true  // Blog siempre activo
     };
 
     // Aplicar a checkboxes

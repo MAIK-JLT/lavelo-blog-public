@@ -406,7 +406,7 @@ Reglas:
 
         raw = await self._openai_chat(
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=1600,
+            max_tokens=4096,
             debug_label="adapted_texts_json"
         )
 
@@ -437,9 +437,17 @@ Reglas:
 - Escribe en español.
 """
                 try:
+                    # max_tokens por plataforma: LinkedIn 3000 chars ≈ 750 tokens, Instagram/TikTok ≈ 550, Twitter ≈ 70
+                    platform_max_tokens = {
+                        'twitter': 200,
+                        'instagram': 800,
+                        'tiktok': 800,
+                        'facebook': 800,
+                        'linkedin': 1200,
+                    }
                     data[platform] = await self._openai_chat(
                         messages=[{"role": "user", "content": per_prompt}],
-                        max_tokens=800,
+                        max_tokens=platform_max_tokens.get(platform, 1000),
                         debug_label=f"adapted_text_{platform}"
                     )
                 except Exception as e:

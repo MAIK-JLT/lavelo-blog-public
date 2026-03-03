@@ -200,11 +200,15 @@ async def update_networks(codigo: str, networks: dict, request: Request):
         user_id = request.session.get('user_id')
         if not user_id:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No autenticado")
+        # El frontend envía {redes: {instagram: true, ...}} — extraer el dict interno si aplica
+        redes_data = networks.get('redes', networks)
         # Actualizar cada red en la BD
         updates = {}
-        for network, active in networks.items():
+        for network, active in redes_data.items():
+            if network == 'blog':
+                continue  # Blog no se guarda, siempre activo
             field_name = f'redes_{network}'
-            updates[field_name] = active
+            updates[field_name] = bool(active)
         
         success = db_service.update_post(codigo, updates, user_id=user_id)
         

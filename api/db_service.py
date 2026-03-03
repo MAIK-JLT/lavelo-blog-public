@@ -154,6 +154,18 @@ def update_post(codigo: str, data: Dict, user_id: Optional[int] = None) -> Dict:
         if 'tiktok_9x16_mp4' in data:
             post.tiktok_9x16_mp4 = data['tiktok_9x16_mp4']
         
+        # Actualizar selección de redes sociales (persiste qué redes eligió el usuario)
+        if 'redes_instagram' in data:
+            post.redes_instagram = data['redes_instagram']
+        if 'redes_linkedin' in data:
+            post.redes_linkedin = data['redes_linkedin']
+        if 'redes_twitter' in data:
+            post.redes_twitter = data['redes_twitter']
+        if 'redes_facebook' in data:
+            post.redes_facebook = data['redes_facebook']
+        if 'redes_tiktok' in data:
+            post.redes_tiktok = data['redes_tiktok']
+
         # Actualizar checkboxes de publicación
         if 'blog_published' in data:
             post.blog_published = data['blog_published']

@@ -72,6 +72,11 @@ def _ensure_sqlite_auth_schema():
         if "user_id" not in post_cols:
             cur.execute("ALTER TABLE posts ADD COLUMN user_id INTEGER")
 
+        # Redes seleccionadas por el usuario (persistencia entre recargas)
+        for redes_col in ['redes_instagram', 'redes_linkedin', 'redes_twitter', 'redes_facebook', 'redes_tiktok']:
+            if redes_col not in post_cols:
+                cur.execute(f"ALTER TABLE posts ADD COLUMN {redes_col} BOOLEAN DEFAULT 0")
+
         conn.commit()
         cur.close()
         conn.close()
