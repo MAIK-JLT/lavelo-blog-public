@@ -394,7 +394,10 @@ def upsert_social_page(page: Dict) -> Dict:
             rec.platform = page.get('platform', rec.platform)
             rec.page_name = page.get('page_name', rec.page_name)
             rec.instagram_account_id = page.get('instagram_account_id', rec.instagram_account_id)
-            rec.page_access_token = page.get('page_access_token', rec.page_access_token)
+            # Solo actualizar page_access_token si el nuevo valor no es None/vacío
+            new_token = page.get('page_access_token')
+            if new_token:
+                rec.page_access_token = new_token
             rec.expires_at = page.get('expires_at', rec.expires_at)
             rec.user_id = page.get('user_id', rec.user_id)
         else:

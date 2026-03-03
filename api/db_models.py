@@ -147,6 +147,7 @@ class SocialPage(Base):
             'page_id': self.page_id,
             'page_name': self.page_name,
             'instagram_account_id': self.instagram_account_id,
+            'page_access_token': self.page_access_token,  # Necesario para publish_service
             'connected_at': self.connected_at.isoformat() if self.connected_at else None,
             'expires_at': self.expires_at.isoformat() if self.expires_at else None
         }
