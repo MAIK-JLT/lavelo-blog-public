@@ -67,6 +67,9 @@ class PublishService:
                     'error': 'Debes seleccionar una página con Instagram asociado. No se puede usar un token global.'
                 }
 
+            if not access_token:
+                return {'success': False, 'error': 'no configurado: page_access_token vacío. Reconecta Instagram para obtener el token de página.'}
+
             print(f"🔑 Token: {access_token[:50]}...")
             print(f"📱 Instagram Account ID: {instagram_account_id}")
             
