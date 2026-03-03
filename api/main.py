@@ -9,7 +9,7 @@ import logging
 import time
 
 # Cargar variables de entorno desde ruta fija de producción
-load_dotenv(dotenv_path='/var/www/vhosts/blog.lavelo.es/private/.env', override=True)
+load_dotenv(dotenv_path='/var/www/vhosts/lavelo.es/private/.env', override=True)
 
 # Configurar logging
 # Crear carpeta logs si no existe
