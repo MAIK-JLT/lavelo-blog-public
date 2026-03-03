@@ -224,6 +224,18 @@ class SocialService:
                         if biz_pages_resp.status_code == 200:
                             for bp in biz_pages_resp.json().get("data", []):
                                 if bp.get("id") not in seen_page_ids:
+                                    # Si no vino el access_token (BM no lo devuelve siempre),
+                                    # intentar obtenerlo directamente por página
+                                    if not bp.get("access_token"):
+                                        pt_resp = requests.get(
+                                            f"https://graph.facebook.com/v21.0/{bp['id']}",
+                                            params={"fields": "access_token", "access_token": user_long_token}
+                                        )
+                                        print(f"🔑 Token directo para {bp.get('name')} => {pt_resp.text[:200]}")
+                                        if pt_resp.status_code == 200:
+                                            pt = pt_resp.json().get("access_token")
+                                            if pt:
+                                                bp["access_token"] = pt
                                     pages_json.append(bp)
                                     seen_page_ids.add(bp.get("id"))
 
