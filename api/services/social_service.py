@@ -4,9 +4,14 @@ Usado por: Panel Web, MCP Server
 """
 import os
 import base64
+import hashlib
+import secrets
 import requests
 from typing import Dict, Optional
 from datetime import datetime, timedelta
+
+# Almacén temporal de code_verifiers PKCE (en memoria, válido mientras vive el proceso)
+_pkce_store: Dict[str, str] = {}  # state -> code_verifier
 
 
 class SocialService:
@@ -132,8 +137,19 @@ class SocialService:
             'state': state
         }
 
-        auth_url = f"{config['auth_url']}?"
-        auth_url += '&'.join([f"{k}={v}" for k, v in auth_params.items()])
+        # Twitter OAuth 2.0 requiere PKCE
+        if platform == 'twitter':
+            code_verifier = secrets.token_urlsafe(64)
+            code_challenge = base64.urlsafe_b64encode(
+                hashlib.sha256(code_verifier.encode()).digest()
+            ).rstrip(b'=').decode()
+            auth_params['code_challenge'] = code_challenge
+            auth_params['code_challenge_method'] = 'S256'
+            _pkce_store[state] = code_verifier
+            print(f"🔐 PKCE generado para Twitter (state={state[:10]}...)")
+
+        from urllib.parse import urlencode
+        auth_url = f"{config['auth_url']}?{urlencode(auth_params)}"
 
         print(f"🔗 URL OAuth generada para {platform}")
 
@@ -297,6 +313,71 @@ class SocialService:
                     "page_id": selected["id"],
                     "instagram_account_id": selected["instagram_id"],
                     "user_long_lived_token": user_long_token
+                }
+
+            # Twitter OAuth 2.0 con PKCE
+            if platform == 'twitter':
+                config = self.oauth_configs['twitter']
+                # Recuperar code_verifier del estado
+                # El state viene del parámetro del callback; buscamos en el store
+                code_verifier = None
+                for stored_state, stored_verifier in list(_pkce_store.items()):
+                    code_verifier = stored_verifier
+                    del _pkce_store[stored_state]
+                    break  # Usar el más reciente disponible
+
+                if not code_verifier:
+                    print("❌ No se encontró code_verifier PKCE para Twitter")
+                    return None
+
+                # Twitter requiere Basic Auth con client_id:client_secret
+                creds = base64.b64encode(
+                    f"{config['client_id']}:{config['client_secret']}".encode()
+                ).decode()
+
+                token_resp = requests.post(
+                    config['token_url'],
+                    headers={
+                        'Authorization': f'Basic {creds}',
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    },
+                    data={
+                        'code': code,
+                        'grant_type': 'authorization_code',
+                        'redirect_uri': redirect_uri,
+                        'code_verifier': code_verifier,
+                    }
+                )
+                print(f"🐦 Twitter token resp: {token_resp.status_code} {token_resp.text[:300]}")
+
+                if token_resp.status_code != 200:
+                    print(f"❌ Error token Twitter: {token_resp.text}")
+                    return None
+
+                data = token_resp.json()
+                access_token = data.get('access_token')
+                refresh_token = data.get('refresh_token')
+
+                # Obtener info del usuario
+                me_resp = requests.get(
+                    'https://api.twitter.com/2/users/me',
+                    headers={'Authorization': f'Bearer {access_token}'},
+                    params={'user.fields': 'id,username,name'}
+                )
+                username = None
+                user_id = None
+                if me_resp.status_code == 200:
+                    me_data = me_resp.json().get('data', {})
+                    username = me_data.get('username') or me_data.get('name')
+                    user_id = me_data.get('id')
+                    print(f"✅ Twitter user: @{username} ({user_id})")
+
+                return {
+                    'access_token': access_token,
+                    'refresh_token': refresh_token,
+                    'expires_in': data.get('expires_in', 7200),
+                    'username': username,
+                    'user_id': user_id
                 }
 
             # Fallback genérico para otras plataformas

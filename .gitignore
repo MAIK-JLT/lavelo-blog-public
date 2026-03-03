@@ -108,6 +108,11 @@ coverage.xml
 local_settings.py
 db.sqlite3
 
+# SQLite - NUNCA subir al servidor (sobreescribe la BD de producción)
+*.db
+*.sqlite
+lavelo_blog.db
+
 # Flask stuff:
 instance/
 .webassets-cache
