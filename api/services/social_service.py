@@ -22,7 +22,7 @@ class SocialService:
             'instagram': {
                 'client_id': os.getenv('INSTAGRAM_CLIENT_ID'),
                 'client_secret': os.getenv('INSTAGRAM_CLIENT_SECRET'),
-                'scope': 'instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement,pages_manage_posts',
+                'scope': 'instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement,pages_manage_posts,business_management',
                 'auth_url': 'https://www.facebook.com/v21.0/dialog/oauth',
                 'token_url': 'https://graph.facebook.com/v21.0/oauth/access_token',
                 'user_info_url': 'https://graph.facebook.com/v21.0/me'
@@ -187,7 +187,7 @@ class SocialService:
                 long_json = long_resp.json()
                 user_long_token = long_json.get("access_token")
 
-                # 3) Obtener páginas del usuario
+                # 3) Obtener páginas del usuario (personales + Business Manager)
                 pages_resp = requests.get(
                     "https://graph.facebook.com/v21.0/me/accounts",
                     params={
@@ -202,6 +202,30 @@ class SocialService:
                     return None
 
                 pages_json = pages_resp.json().get("data", [])
+
+                # También buscar páginas en Business Manager si hay permisos
+                seen_page_ids = set(p.get("id") for p in pages_json)
+                businesses_resp = requests.get(
+                    "https://graph.facebook.com/v21.0/me/businesses",
+                    params={"access_token": user_long_token, "fields": "id,name"}
+                )
+                print("🏢 /me/businesses =>", businesses_resp.text)
+                if businesses_resp.status_code == 200:
+                    for biz in businesses_resp.json().get("data", []):
+                        biz_id = biz.get("id")
+                        biz_pages_resp = requests.get(
+                            f"https://graph.facebook.com/v21.0/{biz_id}/owned_pages",
+                            params={
+                                "access_token": user_long_token,
+                                "fields": "id,name,access_token,instagram_business_account"
+                            }
+                        )
+                        print(f"📄 /{biz_id}/owned_pages =>", biz_pages_resp.text)
+                        if biz_pages_resp.status_code == 200:
+                            for bp in biz_pages_resp.json().get("data", []):
+                                if bp.get("id") not in seen_page_ids:
+                                    pages_json.append(bp)
+                                    seen_page_ids.add(bp.get("id"))
 
                 pages_all = []
                 pages_with_ig = []
