@@ -372,10 +372,15 @@ async def publish_to_social_networks(request: Request):
         )
         
         if published_count == 0 and not all_config_errors:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="No se pudo publicar en ninguna red social"
-            )
+            # Devolver los errores reales en lugar de un 500 genérico
+            return {
+                'success': False,
+                'published_count': 0,
+                'total': len(networks),
+                'results': results,
+                'message': 'No se pudo publicar en ninguna red social',
+                'config_needed': False
+            }
         
         # Si todas fallaron por configuración, devolver info útil
         if published_count == 0 and all_config_errors:
