@@ -313,6 +313,8 @@ async def publish_to_social_networks(request: Request):
         data = await request.json()
         codigo = data.get('codigo')
         networks = data.get('networks', [])
+        page_id = data.get('page_id')
+        instagram_account_id = data.get('instagram_account_id')
         
         if not codigo:
             raise HTTPException(
@@ -336,13 +338,20 @@ async def publish_to_social_networks(request: Request):
             try:
                 # Llamar al método específico de cada red
                 if network == 'instagram':
-                    result = publish_service.publish_to_instagram(codigo, user_id=user_id)
+                    result = publish_service.publish_to_instagram(
+                        codigo, user_id=user_id,
+                        page_id=page_id,
+                        instagram_account_id=instagram_account_id
+                    )
                 elif network == 'linkedin':
                     result = publish_service.publish_to_linkedin(codigo, user_id=user_id)
                 elif network == 'twitter':
                     result = publish_service.publish_to_twitter(codigo, user_id=user_id)
                 elif network == 'facebook':
-                    result = publish_service.publish_to_facebook(codigo, user_id=user_id)
+                    result = publish_service.publish_to_facebook(
+                        codigo, user_id=user_id,
+                        page_id=page_id
+                    )
                 elif network == 'tiktok':
                     result = publish_service.publish_to_tiktok(codigo, user_id=user_id)
                 else:
