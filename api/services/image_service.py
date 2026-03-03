@@ -138,9 +138,12 @@ class ImageService:
                 image_bytes = response.content
                 
                 # Guardar localmente
-                # Guardar como variaciones numeradas
-                # (_1, _2, ...) y copiar _1 a imagen_base.png
-                filename = f"{codigo}_imagen_base_{idx}.png"
+                # Si num_images == 1, guardar directo como imagen_base.png
+                # Si num_images > 1, guardar variaciones numeradas
+                if num_images == 1:
+                    filename = f"{codigo}_imagen_base.png"
+                else:
+                    filename = f"{codigo}_imagen_base_{idx}.png"
                 
                 self.file_service.save_binary_file(codigo, 'imagenes', filename, image_bytes)
                 
@@ -152,8 +155,8 @@ class ImageService:
                 
                 print(f"  💾 Guardada: {filename}")
 
-        # Copiar la primera variación como imagen base
-        if generated_images:
+        # Copiar la primera variación como imagen base si se generaron variaciones
+        if generated_images and num_images > 1:
             try:
                 first_filename = f"{codigo}_imagen_base_1.png"
                 first_bytes = self.file_service.read_binary_file(codigo, 'imagenes', first_filename)
@@ -161,9 +164,20 @@ class ImageService:
                     self.file_service.save_binary_file(codigo, 'imagenes', f"{codigo}_imagen_base.png", first_bytes)
             except Exception as e:
                 print(f"⚠️ No se pudo copiar imagen base: {e}")
+
+        # Si solo se generó imagen base, limpiar metadata/variaciones anteriores
+        if num_images == 1:
+            try:
+                imagenes = self.file_service.list_files(codigo, 'imagenes')
+                for fname in imagenes:
+                    if fname.startswith(f"{codigo}_imagen_base_") and fname.endswith(".png"):
+                        self.file_service.delete_file(codigo, 'imagenes', fname)
+                self.file_service.delete_file(codigo, 'textos', f"{codigo}_imagen_variations.json")
+            except Exception as e:
+                print(f"⚠️ No se pudieron limpiar variaciones anteriores: {e}")
         
         # 7. Guardar metadata de variaciones
-        if generated_images:
+        if generated_images and num_images > 1:
             variations = [img["filename"] for img in generated_images]
             metadata = {
                 "generated": variations,

@@ -135,7 +135,7 @@ async def select_base_image(request: SelectBaseImageRequest, http_request: Reque
         if metadata_text:
             try:
                 metadata = json.loads(metadata_text)
-                metadata["selected"] = base_filename
+                metadata["selected"] = filename
                 file_service.save_file(codigo, "textos", metadata_filename, json.dumps(metadata, indent=2))
             except Exception:
                 pass

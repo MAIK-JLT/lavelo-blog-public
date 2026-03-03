@@ -223,7 +223,7 @@ async function renderImagePromptPhase() {
     phaseContent.innerHTML = `
         <div class="phase-section">
             <h2 class="phase-title">🎨 Prompt de Imagen</h2>
-            <p style="color: #666; margin-bottom: 20px;">Revisa y edita el prompt que se usará para generar la imagen base. Debe ser descriptivo y en inglés.</p>
+            <p style="color: #666; margin-bottom: 20px;">Revisa y edita el prompt que se usará para generar la imagen base. Debe ser descriptivo y en español.</p>
             <div class="text-item">
                 <h3>📝 Prompt para Generación de Imagen</h3>
                 <textarea id="prompt-editor" class="content-editor" data-original="${escapeHtml(promptText || '')}" style="min-height: 150px;">${promptText || ''}</textarea>

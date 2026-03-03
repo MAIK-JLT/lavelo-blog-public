@@ -8,15 +8,8 @@ import os
 import logging
 import time
 
-# Cargar variables de entorno
-# 1) Usa ENV_FILE o LAVELO_ENV_FILE si están definidos (p. ej. /var/www/vhosts/<dominio>/private/.env)
-# 2) Si no, hace fallback al .env del repo (../.env) para desarrollo local
-default_env = os.path.join(os.path.dirname(__file__), '..', '.env')
-env_file = os.getenv('ENV_FILE', os.getenv('LAVELO_ENV_FILE', '/var/www/vhosts/blog.lavelo.es/private/.env'))
-if os.path.exists(env_file):
-    load_dotenv(dotenv_path=env_file)
-else:
-    load_dotenv(dotenv_path=default_env)
+# Cargar variables de entorno desde ruta fija de producción
+load_dotenv(dotenv_path='/var/www/vhosts/blog.lavelo.es/private/.env', override=True)
 
 # Configurar logging
 # Crear carpeta logs si no existe

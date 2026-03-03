@@ -388,23 +388,26 @@ Categorías disponibles:
 
         # Una sola llamada a OpenAI que devuelve JSON con cada red
         networks_list = "\n".join([f"- {k}: {v}" for k, v in active_platforms.items()])
+        base_excerpt = base_text[:3000]
         prompt = f"""Devuelve un JSON válido con los textos adaptados para cada red social.
 
 Redes y requisitos:
 {networks_list}
 
 Texto original:
-{base_text}
+{base_excerpt}
 
 Reglas:
 - Responde SOLO con JSON válido (sin explicaciones, sin markdown).
 - El JSON debe contener exactamente las claves: {list(active_platforms.keys())}
 - Cada valor debe ser el texto final adaptado y listo para publicar.
+- Escribe en español.
 """
 
         raw = await self._openai_chat(
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=2400
+            max_tokens=1600,
+            debug_label="adapted_texts_json"
         )
 
         # Parsear JSON (limpiar posibles fences)
@@ -427,15 +430,16 @@ Reglas:
                 per_prompt = f"""Adapta este texto para {desc}.
 
 Texto original:
-{base_text}
+{base_excerpt}
 
 Reglas:
 - Devuelve SOLO el texto final, sin JSON ni explicaciones.
+- Escribe en español.
 """
                 try:
                     data[platform] = await self._openai_chat(
                         messages=[{"role": "user", "content": per_prompt}],
-                        max_tokens=1200,
+                        max_tokens=800,
                         debug_label=f"adapted_text_{platform}"
                     )
                 except Exception as e:
@@ -496,7 +500,7 @@ El prompt debe:
 - Ser descriptivo y específico
 - Incluir estilo visual, colores, composición
 - Máximo 900 caracteres
-- En inglés
+- En español
 - Sin explicaciones, solo el prompt
 
 Genera SOLO el prompt de imagen."""
@@ -513,7 +517,7 @@ Genera SOLO el prompt de imagen."""
         if not image_prompt:
             logger.warning("⚠️ Prompt de imagen vacío, reintentando una vez...")
             image_prompt = await self._openai_chat(
-                messages=[{"role": "user", "content": prompt + "\n\nReturn a non-empty prompt."}],
+                messages=[{"role": "user", "content": prompt + "\n\nDevuelve un prompt no vacío."}],
                 max_tokens=700,
                 debug_label="generate_image_prompt_retry"
             )
@@ -649,14 +653,15 @@ INSTRUCCIONES:
 1. Mantén la esencia y contenido del prompt original
 2. Incorpora las selecciones visuales de forma natural
 3. Si hay referencias, menciona que se usarán como guía visual
-4. El prompt mejorado debe ser claro, descriptivo y en inglés
+4. El prompt mejorado debe ser claro, descriptivo y en español
 5. Máximo 500 palabras
 
 Genera SOLO el prompt mejorado, sin explicaciones adicionales."""
 
         improved_prompt = (await self._openai_chat(
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=1800
+            max_tokens=1600,
+            debug_label="improve_prompt_visual"
         )).strip()
         
         print(f"✨ Prompt mejorado ({len(improved_prompt)} chars)")

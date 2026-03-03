@@ -1,14 +1,39 @@
 baseURL = 'https://blog.lavelo.es/'
-languageCode = 'en-us'
+languageCode = 'es'
+defaultContentLanguage = 'es'
 title = 'Lavelo Cycling Blog'
 theme = ["PaperMod"]
 
+[languages]
+  [languages.es]
+    languageCode = 'es'
+    languageName = 'Español'
+    weight = 1
+    title = 'Lavelo Cycling Blog'
+    [languages.es.params]
+      description = "Bases de entrenamiento ciclista profesional en la Costa Blanca"
+    [languages.es.params.homeInfoParams]
+      Title = "Entrenamiento Ciclista en la Costa Blanca"
+      Content = "Guías expertas sobre rutas, entrenamiento y campos de ciclismo en Alicante"
+
+  [languages.en]
+    languageCode = 'en'
+    languageName = 'English'
+    weight = 2
+    title = 'Lavelo Cycling Blog'
+    [languages.en.params]
+      description = "Professional cycling training camps in Costa Blanca"
+    [languages.en.params.homeInfoParams]
+      Title = "Cycling Training Insights"
+      Content = "Expert guides on cycling routes, training, and camps in Costa Blanca"
+
 [params]
-  description = "Professional cycling training camps in Costa Blanca"
-  
-[params.homeInfoParams]
-  Title = "Cycling Training Insights"
-  Content = "Expert guides on cycling routes, training, and camps in Costa Blanca"
+  description = "Bases de entrenamiento ciclista en la Costa Blanca | Lavelo"
+  ShowReadingTime = true
+  ShowShareButtons = false
+  ShowPostNavLinks = true
+  ShowBreadCrumbs = true
+  ShowCodeCopyButtons = false
 
 [menu]
   [[menu.main]]
